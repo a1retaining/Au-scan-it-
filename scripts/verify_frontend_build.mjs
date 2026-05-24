@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 
-const buildId = 'AU-ASX-INSTITUTIONAL-DESK-V19';
+const buildId = 'AU-ASX-INSTITUTIONAL-DESK-V20';
 const dist = path.join(process.cwd(), 'frontend', 'dist');
 
 function walk(dir) {

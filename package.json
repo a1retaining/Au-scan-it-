@@ -1,6 +1,6 @@
 {
   "name": "asx-trade-finder",
-  "version": "0.19.0",
+  "version": "0.20.0",
   "private": true,
   "description": "ASX Trade Finder monorepo root. Frontend lives in ./frontend and backend lives in ./src.",
   "scripts": {
