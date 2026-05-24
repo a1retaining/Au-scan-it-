@@ -37,13 +37,25 @@ import './styles.css';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (typeof window !== 'undefined' ? window.location.origin : '');
 const AUTO_REFRESH_MS = Number(import.meta.env.VITE_AUTO_REFRESH_MS || 60000);
-const BUILD_ID = 'AU-ASX-INSTITUTIONAL-DESK-V20';
+const BUILD_ID = 'AU-ASX-INSTITUTIONAL-DESK-V21';
 
 const fallbackSignals = [
   { ticker: 'CBA', name: 'Commonwealth Bank', sector: 'Banks', score: 88, confidence: 82, status: 'REVIEW', setup: 'Pullback to value', price: 123.4, entry: 123.2, stop: 119.8, target: 132.7, rr: 2.79, volume: 1.3, change: 0.8, keyZone: '$122.40 to $124.10', why: ['Trend structure still positive', 'Banks sector holding up better than market', 'Price is near a defined buy zone'], risks: ['Market is closed, no entry now', 'Needs fresh liquidity check at open'] },
   { ticker: 'BHP', name: 'BHP Group', sector: 'Materials', score: 84, confidence: 78, status: 'REVIEW', setup: 'Breakout watch', price: 45.12, entry: 45.3, stop: 43.7, target: 49.1, rr: 2.38, volume: 1.1, change: 0.5, keyZone: '$44.90 to $45.40', why: ['Materials heatmap is strong', 'Entry is close to resistance break', 'Risk is defined'], risks: ['Commodity-sensitive', 'Needs iron ore confirmation'] },
+  { ticker: 'NAB', name: 'National Australia Bank', sector: 'Banks', score: 82, confidence: 76, status: 'REVIEW', setup: 'Higher-low continuation', price: 34.8, entry: 35.1, stop: 33.9, target: 38.2, rr: 2.58, volume: 1.2, change: 0.4, keyZone: '$34.80 to $35.20', why: ['Bank sector strength', 'Higher low holding'], risks: ['Needs open liquidity confirmation'] },
+  { ticker: 'RIO', name: 'Rio Tinto', sector: 'Materials', score: 80, confidence: 75, status: 'REVIEW', setup: 'Base breakout watch', price: 128.2, entry: 129.0, stop: 124.4, target: 139.8, rr: 2.35, volume: 1.0, change: 0.3, keyZone: '$128.40 to $129.30', why: ['Materials sector supportive', 'Clean base structure'], risks: ['Commodity and China headline risk'] },
   { ticker: 'WES', name: 'Wesfarmers', sector: 'Consumer', score: 72, confidence: 67, status: 'WATCH', setup: 'Base forming', price: 67.8, entry: 68.5, stop: 66.2, target: 72.8, rr: 1.87, volume: 0.9, change: 0.2, keyZone: '$67.90 to $68.70', why: ['Base structure is improving'], risks: ['Reward is below 2R', 'Volume not strong enough'] },
   { ticker: 'CSL', name: 'CSL Limited', sector: 'Healthcare', score: 51, confidence: 48, status: 'BLOCKED', setup: 'Weak relative strength', price: 284.1, entry: 291, stop: 279, target: 306, rr: 1.25, volume: 0.8, change: -0.9, keyZone: 'No clean buy zone', why: ['High quality company, poor current setup'], risks: ['Sector weak', 'No entry trigger', 'Below trade threshold'] },
+  { ticker: 'WBC', name: 'Westpac', sector: 'Banks', score: 78, confidence: 71, status: 'WATCH', setup: 'Pullback watch', price: 27.9, entry: 28.2, stop: 27.1, target: 30.5, rr: 2.09, volume: 1.0, change: 0.2, keyZone: '$27.90 to $28.30', why: ['Sector supports watch status'], risks: ['Needs stronger trigger'] },
+  { ticker: 'MQG', name: 'Macquarie Group', sector: 'Financials', score: 79, confidence: 73, status: 'WATCH', setup: 'Trend continuation', price: 203.4, entry: 205.0, stop: 197.5, target: 221.0, rr: 2.13, volume: 0.95, change: 0.1, keyZone: '$203.50 to $205.40', why: ['Financials improving'], risks: ['Wide stop for $5k paper account'] },
+  { ticker: 'FMG', name: 'Fortescue', sector: 'Materials', score: 76, confidence: 70, status: 'WATCH', setup: 'Commodity pullback', price: 24.6, entry: 24.9, stop: 23.7, target: 27.5, rr: 2.17, volume: 1.1, change: 0.4, keyZone: '$24.50 to $25.00', why: ['Materials flow positive'], risks: ['Iron ore sensitivity'] },
+  { ticker: 'NEM', name: 'Newmont', sector: 'Gold', score: 77, confidence: 74, status: 'WATCH', setup: 'Gold strength pullback', price: 72.2, entry: 72.8, stop: 69.9, target: 79.4, rr: 2.28, volume: 1.2, change: 0.8, keyZone: '$72.00 to $73.00', why: ['Gold tape supportive'], risks: ['Gold/USD reversal risk'] },
+  { ticker: 'WDS', name: 'Woodside Energy', sector: 'Energy', score: 66, confidence: 61, status: 'WATCH', setup: 'Range reclaim', price: 29.7, entry: 30.1, stop: 28.9, target: 32.8, rr: 2.25, volume: 0.85, change: -0.1, keyZone: '$29.80 to $30.20', why: ['Energy mixed but tradable watch'], risks: ['Oil price mixed'] },
+  { ticker: 'XRO', name: 'Xero', sector: 'Technology', score: 74, confidence: 69, status: 'WATCH', setup: 'Momentum reset', price: 128.6, entry: 130.0, stop: 124.8, target: 141.2, rr: 2.15, volume: 1.05, change: 0.6, keyZone: '$128.50 to $130.20', why: ['Tech watchlist strength'], risks: ['Nasdaq lead needed'] },
+  { ticker: 'GMG', name: 'Goodman Group', sector: 'REITs', score: 69, confidence: 63, status: 'WATCH', setup: 'Rate-sensitive base', price: 33.4, entry: 33.8, stop: 32.5, target: 36.5, rr: 2.08, volume: 0.9, change: 0.1, keyZone: '$33.40 to $33.90', why: ['Base still forming'], risks: ['Bond yield sensitivity'] },
+  { ticker: 'PLS', name: 'Pilbara Minerals', sector: 'Lithium', score: 42, confidence: 39, status: 'BLOCKED', setup: 'Weak sector', price: 3.1, entry: 3.25, stop: 2.98, target: 3.85, rr: 2.22, volume: 1.0, change: -1.2, keyZone: 'Blocked until lithium improves', why: ['Low price may move'], risks: ['Lithium sector weak', 'Blocked by heatmap'] },
+  { ticker: 'WOW', name: 'Woolworths', sector: 'Staples', score: 58, confidence: 55, status: 'BLOCKED', setup: 'Defensive laggard', price: 31.2, entry: 31.8, stop: 30.4, target: 34.4, rr: 1.86, volume: 0.7, change: -0.2, keyZone: 'No clean buy zone', why: ['Defensive liquidity'], risks: ['Weak relative strength', 'R/R under 2R'] },
+  { ticker: 'TLS', name: 'Telstra', sector: 'Communications', score: 62, confidence: 58, status: 'WATCH', setup: 'Slow trend watch', price: 3.95, entry: 4.02, stop: 3.86, target: 4.38, rr: 2.25, volume: 0.8, change: 0.1, keyZone: '$3.96 to $4.03', why: ['Stable trend'], risks: ['Slow mover, costs matter'] },
 ];
 
 const sectors = [
@@ -72,8 +84,10 @@ function compactMoney(value) {
 }
 function countdown(seconds) {
   const s = Math.max(0, Number(seconds || 0));
-  const h = Math.floor(s / 3600);
+  const d = Math.floor(s / 86400);
+  const h = Math.floor((s % 86400) / 3600);
   const m = Math.floor((s % 3600) / 60);
+  if (d > 0) return `${d}d ${h}h ${m}m`;
   return `${h}h ${m}m`;
 }
 function normaliseSignal(s) {
@@ -102,13 +116,22 @@ function normaliseSignal(s) {
     risks: [...(s.risks || []), ...(s.blockers || [])],
   };
 }
-function buildChart(seed = 100) {
+function tickerHash(ticker = 'ASX') {
+  return String(ticker).split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+}
+function buildChart(seed = 100, ticker = 'ASX') {
   const rows = [];
-  for (let i = 0; i < 80; i += 1) {
-    const trend = i * 0.12;
-    const wave = Math.sin(i / 5) * 1.6;
-    const price = seed + trend + wave;
-    rows.push({ day: i + 1, price: Number(price.toFixed(2)), ma20: Number((price - 0.9 + Math.sin(i / 10)).toFixed(2)), vol: Math.round(700000 + Math.sin(i) * 120000 + i * 2000) });
+  const h = tickerHash(ticker);
+  const phase = (h % 19) / 3;
+  const vol = 0.55 + (h % 7) * 0.16;
+  const trend = ((h % 11) - 3) * 0.025;
+  let price = Number(seed || 100) * (0.94 + (h % 5) * 0.015);
+  let ma = price;
+  for (let i = 0; i < 100; i += 1) {
+    const shock = Math.sin((i + phase) / (3.6 + (h % 5))) * vol + Math.cos((i + phase) / (7.5 + (h % 3))) * vol * 0.7;
+    price = price + trend + shock * 0.16;
+    ma = ma * 0.88 + price * 0.12;
+    rows.push({ day: i + 1, price: Number(price.toFixed(2)), ma20: Number(ma.toFixed(2)), vol: Math.round(550000 + ((Math.sin(i / 2 + phase) + 1) * 150000) + i * (900 + (h % 9) * 150)) });
   }
   return rows;
 }
@@ -187,13 +210,13 @@ function TopBar({ clock, paper, signals, apiState, lastRefresh, paused, setPause
   );
 }
 
-function PriorityQueue({ signals, selected, setSelected }) {
+function PriorityQueue({ signals, selected, onSelect }) {
   return (
     <aside className="queuePanel">
       <div className="panelTitle"><Zap size={18} /><span>Priority Queue</span></div>
       <div className="queueList">
         {signals.slice(0, 12).map((s, idx) => (
-          <button key={s.ticker} className={`queueRow ${selected?.ticker === s.ticker ? 'active' : ''}`} onClick={() => setSelected(s)}>
+          <button key={s.ticker} className={`queueRow ${selected?.ticker === s.ticker ? 'active' : ''}`} onClick={() => onSelect(s)}>
             <div className="rank">{idx + 1}</div>
             <div className="qMain"><strong>{s.ticker}</strong><small>{s.setup}</small></div>
             <div className="qScore"><b>{s.score}</b><StatusPill status={s.status} /></div>
@@ -213,7 +236,7 @@ function PriorityQueue({ signals, selected, setSelected }) {
   );
 }
 
-function SignalBook({ signals, selected, setSelected }) {
+function SignalBook({ signals, selected, onSelect }) {
   return (
     <div className="signalBook">
       <div className="panelTitle"><Activity size={18} /><span>Signal Blotter</span><em>click a row to update chart and trade plan</em></div>
@@ -222,7 +245,7 @@ function SignalBook({ signals, selected, setSelected }) {
           <thead><tr><th>Ticker</th><th>Sector</th><th>Setup</th><th>Score</th><th>Confidence</th><th>Entry</th><th>Stop</th><th>Target</th><th>R/R</th><th>Status</th></tr></thead>
           <tbody>
             {signals.map((s) => (
-              <tr key={s.ticker} className={selected?.ticker === s.ticker ? 'selected' : ''} onClick={() => setSelected(s)}>
+              <tr key={s.ticker} className={selected?.ticker === s.ticker ? 'selected' : ''} onClick={() => onSelect(s)}>
                 <td><b>{s.ticker}</b><small>{s.name}</small></td>
                 <td>{s.sector}</td>
                 <td>{s.setup}</td>
@@ -243,7 +266,7 @@ function SignalBook({ signals, selected, setSelected }) {
 }
 
 function DeskChart({ selected, chart }) {
-  const data = chart?.length ? chart : buildChart(Number(selected?.entry || 100));
+  const data = chart?.length ? chart : buildChart(Number(selected?.entry || 100), selected?.ticker);
   return (
     <section className="chartPanel">
       <div className="chartHeader">
@@ -367,7 +390,9 @@ function App() {
     if (!audioArmed) {
       const ok = await unlockAudio();
       setAudioArmed(ok);
+      return ok;
     }
+    return true;
   };
 
   const fetchJson = async (path) => {
@@ -409,9 +434,18 @@ function App() {
     if (!selected?.ticker) return;
     fetchJson(`/prices/${selected.ticker}`).then((data) => {
       const rows = (data.prices || data || []).map((x, i) => ({ day: i + 1, price: Number(x.close || x.price || x.Price || 0), ma20: Number(x.ma20 || x.close || x.price || 0), vol: Number(x.volume || 0) })).filter((x) => x.price);
-      setChart(rows.length ? rows.slice(-120) : buildChart(Number(selected.entry || 100)));
-    }).catch(() => setChart(buildChart(Number(selected.entry || 100))));
+      setChart(rows.length ? rows.slice(-120) : buildChart(Number(selected.entry || 100), selected.ticker));
+    }).catch(() => setChart(buildChart(Number(selected.entry || 100), selected.ticker)));
   }, [selected?.ticker]);
+
+  const selectSignal = async (stock) => {
+    setSelected(stock);
+    const ok = await armOnce();
+    if (ok) {
+      tone(String(stock.status).toUpperCase() === 'BLOCKED' ? 'stop' : 'entry');
+      speak(`${stock.ticker} selected. ${stock.status}. ${stock.setup}. Entry ${money(stock.entry)}. Stop ${money(stock.stop)}. Target ${money(stock.target)}.`);
+    }
+  };
 
   const readSelected = async () => {
     await armOnce();
@@ -440,10 +474,10 @@ function App() {
       <TopBar clock={clock} paper={paper} signals={sorted} apiState={apiState} lastRefresh={lastRefresh} paused={paused} setPaused={setPaused} refresh={refresh} audioArmed={audioArmed} />
       {alert && <div className="tradeToast"><Bell size={18} /><span>{alert}</span><button onClick={() => setAlert(null)}>close</button></div>}
       <div className="deskGrid">
-        <PriorityQueue signals={sorted} selected={selected} setSelected={setSelected} />
+        <PriorityQueue signals={sorted} selected={selected} onSelect={selectSignal} />
         <section className="centreStack">
           <DeskChart selected={selected} chart={chart} />
-          <SignalBook signals={sorted} selected={selected} setSelected={setSelected} />
+          <SignalBook signals={sorted} selected={selected} onSelect={selectSignal} />
         </section>
         <section className="rightStack">
           <TradePlan selected={selected} clock={clock} onPaper={sendPaper} onRead={readSelected} />

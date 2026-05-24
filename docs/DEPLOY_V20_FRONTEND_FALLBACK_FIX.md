@@ -1,4 +1,4 @@
-# V20 Render Frontend/API Fallback Fix
+# V21 Render Frontend/API Fallback Fix
 
 ## What this fixes
 
@@ -6,7 +6,7 @@ The frontend was trying to fetch `/signals` from the frontend service. If `API_P
 
 `Unexpected token '<', '<!doctype ... is not valid JSON`
 
-V20 fixes this by adding safe local JSON fallback responses for:
+V21 fixes this by adding safe local JSON fallback responses for:
 
 - `/signals`
 - `/market-clock`
@@ -41,7 +41,7 @@ https://YOUR-FRONTEND.onrender.com/health
 Expected:
 
 ```json
-{ "build_id": "AU-ASX-INSTITUTIONAL-DESK-V20" }
+{ "build_id": "AU-ASX-INSTITUTIONAL-DESK-V21" }
 ```
 
 Open:
