@@ -15,7 +15,4 @@ services:
     staticPublishPath: dist
     envVars:
       - key: VITE_API_BASE_URL
-        fromService:
-          type: web
-          name: asx-trade-finder-api
-          property: host
+        value: https://asx-trade-finder-api.onrender.com

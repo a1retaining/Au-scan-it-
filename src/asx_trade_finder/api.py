@@ -2,15 +2,25 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Dict
+from datetime import datetime, timezone
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from .models import TradeSignal, SignalStatus
 from .paper import PaperAccount
 from .scanner import scan_watchlist
 
-app = FastAPI(title="ASX Trade Finder API", version="0.3.0")
+app = FastAPI(title="ASX Trade Finder API", version="0.4.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 WATCHLIST = Path("data/sample/sample_watchlist.csv")
 PRICES = Path("data/sample/prices")
@@ -50,12 +60,26 @@ def save_account(account: PaperAccount) -> None:
 
 @app.get("/health")
 def health() -> Dict[str, str]:
-    return {"status": "ok"}
+    return {"status": "ok", "service": "asx-trade-finder-api", "time_utc": datetime.now(timezone.utc).isoformat()}
+
+
+@app.get("/keepalive")
+def keepalive() -> Dict[str, str]:
+    """Lightweight endpoint for uptime monitors or Render cron pings."""
+    return {"status": "awake", "time_utc": datetime.now(timezone.utc).isoformat()}
 
 
 @app.get("/signals")
 def signals():
-    return scan_watchlist(WATCHLIST, PRICES).to_dict(orient="records")
+    data = scan_watchlist(WATCHLIST, PRICES).to_dict(orient="records")
+    return {"refreshed_at": datetime.now(timezone.utc).isoformat(), "count": len(data), "signals": data}
+
+
+@app.post("/refresh")
+def refresh_signals():
+    """Force a scan refresh. Uses sample CSV provider until a real ASX provider is connected."""
+    data = scan_watchlist(WATCHLIST, PRICES).to_dict(orient="records")
+    return {"ok": True, "refreshed_at": datetime.now(timezone.utc).isoformat(), "count": len(data), "signals": data}
 
 
 @app.get("/paper")

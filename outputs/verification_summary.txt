@@ -1,23 +1,16 @@
-ASX Trade Finder Pro v8 verification
+ASX Trade Finder Pro v9 verification
 
-Fix applied:
-- Added root package.json so Render no longer fails looking for /opt/render/project/src/package.json.
-- Added root package-lock.json.
-- Added render.yaml blueprint for API + frontend deployment.
-- Added docs/RENDER_DEPLOYMENT.md.
+Frontend:
+- npm run build from repo root: passed
+- npm start from repo root: passed, Vite preview served on PORT/default 10000
 
-Verified:
-- Root npm run build: passed
-- Frontend Vite production build: passed
-- Backend tests: 12 passed
-- Scanner sample run: passed using PYTHONPATH=src
-- Backtest sample run: passed using PYTHONPATH=src
+Backend:
+- python tests: 12 passed
+- sample scanner: passed with PYTHONPATH=src, and works after pip install -e .
+- sample backtest: passed with PYTHONPATH=src, and works after pip install -e .
 
-Render frontend settings:
-Root Directory: frontend
-Build Command: npm ci && npm run build
-Publish Directory: dist
-
-Render API settings:
-Build Command: pip install -r requirements.txt && pip install -e .
-Start Command: uvicorn asx_trade_finder.api:app --host 0.0.0.0 --port $PORT
+Render fix:
+- root npm start now installs frontend dependencies if node_modules is missing
+- root npm start builds frontend/dist if dist is missing
+- root npm start runs Vite preview on ${PORT:-10000}
+- docs/RENDER_DEPLOYMENT.md updated

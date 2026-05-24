@@ -226,3 +226,29 @@ Start Command: uvicorn asx_trade_finder.api:app --host 0.0.0.0 --port $PORT
 ```
 
 A `render.yaml` blueprint is also included.
+
+## Render deploy fix
+
+For Render, the safest frontend setup is:
+
+```text
+Root Directory: frontend
+Build Command: npm ci && npm run build
+Publish Directory: dist
+```
+
+If Render is set up as a Node Web Service from the repo root, use:
+
+```text
+Build Command: npm run build
+Start Command: npm start
+```
+
+The root `npm start` command now installs frontend dependencies if needed and starts Vite preview on `$PORT`, which fixes `vite: not found` errors.
+
+
+## Keepalive and auto refresh
+
+The app now includes a backend `/keepalive` endpoint, a GitHub Actions keepalive workflow, and frontend signal polling. See `docs/KEEPALIVE_AND_AUTO_REFRESH.md`.
+
+Render free services can still spin down or run out of free monthly hours. For true never-sleep hosting, use a paid Render instance.

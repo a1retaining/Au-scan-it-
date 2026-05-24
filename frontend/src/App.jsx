@@ -12,6 +12,36 @@ import {
 } from 'lucide-react';
 import './styles.css';
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
+const AUTO_REFRESH_MS = Number(import.meta.env.VITE_AUTO_REFRESH_MS || 60000);
+
+function normaliseSignal(signal){
+  const base = stocks[signal.ticker] || {};
+  return {
+    ...base,
+    ticker: signal.ticker,
+    name: signal.name || base.name || signal.ticker,
+    sector: signal.sector || base.sector || 'Unknown',
+    score: Math.round(signal.score || base.score || 0),
+    confidence: Math.round(signal.confidence || base.confidence || 0),
+    grade: signal.grade || base.grade || 'C',
+    status: signal.status || base.status || 'WATCH',
+    setup: signal.setup || base.setup || 'System signal',
+    entry: Number(signal.entry || base.entry || 0),
+    stop: Number(signal.stop || base.stop || 0),
+    target: Number(signal.target || base.target || 0),
+    rr: Number(signal.risk_reward || base.rr || 0),
+    volume: Number(signal.volume_multiple || base.volume || 0),
+    price: Number(base.price || signal.entry || 0),
+    change: Number(base.change || 0),
+    risk: base.risk || '0.50%',
+    paperQty: base.paperQty || 0,
+    why: signal.reasons || base.why || ['Signal refreshed from backend'],
+    risks: signal.risks || signal.blockers || base.risks || [],
+    chart: base.chart || []
+  };
+}
+
 const stocks = {
   CBA: {
     ticker: 'CBA', name: 'Commonwealth Bank', sector: 'Banks', price: 123.4, change: 1.8,
@@ -191,11 +221,40 @@ function App(){
   const [voiceOn, setVoiceOn] = useState(true);
   const [audioReady, setAudioReady] = useState(false);
   const [tradeAlert, setTradeAlert] = useState(null);
-  const stock = stocks[selected];
-  const rows = useMemo(()=>Object.values(stocks).sort((a,b)=>b.score-a.score),[]);
+  const [liveStocks, setLiveStocks] = useState(null);
+  const [lastRefresh, setLastRefresh] = useState('demo data');
+  const [refreshError, setRefreshError] = useState('');
+  const dataStocks = liveStocks || stocks;
+  const stock = dataStocks[selected] || Object.values(dataStocks)[0];
+  const rows = useMemo(()=>Object.values(dataStocks).sort((a,b)=>b.score-a.score),[dataStocks]);
   const paperEquity = 5018;
   const paperCash = 4971;
   useEffect(()=>{ if(!tradeAlert) return; const t=setTimeout(()=>setTradeAlert(null),60000); return ()=>clearTimeout(t); },[tradeAlert]);
+  useEffect(()=>{
+    let cancelled = false;
+    const refresh = async()=>{
+      if(!API_BASE){ setLastRefresh('demo data, set VITE_API_BASE_URL for live refresh'); return; }
+      try{
+        const res = await fetch(`${API_BASE}/signals`, { cache: 'no-store' });
+        if(!res.ok) throw new Error(`HTTP ${res.status}`);
+        const payload = await res.json();
+        const signals = Array.isArray(payload) ? payload : payload.signals;
+        const next = {};
+        (signals || []).forEach(sig => { const row = normaliseSignal(sig); next[row.ticker] = row; });
+        if(!cancelled && Object.keys(next).length){
+          setLiveStocks(next);
+          setSelected(prev => next[prev] ? prev : Object.keys(next)[0]);
+          setLastRefresh(new Date(payload.refreshed_at || Date.now()).toLocaleTimeString());
+          setRefreshError('');
+        }
+      }catch(err){
+        if(!cancelled){ setRefreshError(String(err.message || err)); setLastRefresh('refresh failed'); }
+      }
+    };
+    refresh();
+    const timer = setInterval(refresh, AUTO_REFRESH_MS);
+    return ()=>{ cancelled = true; clearInterval(timer); };
+  },[]);
   const triggerAlert = (type, s=stock)=>{
     const message = buildVoiceMessage(type, s);
     setTradeAlert({...s, type, message});
@@ -212,7 +271,7 @@ function App(){
   };
   return <main>
     <header className="hero">
-      <div><h1><Flame/> TRADERS SUCCESS FORMULA: ASX</h1><p>Australian trading command centre, built for GitHub, paper testing, signal education, and risk-first execution.</p></div>
+      <div><h1><Flame/> TRADERS SUCCESS FORMULA: ASX</h1><p>Australian trading command centre, built for GitHub, paper testing, signal education, and risk-first execution. Auto refresh: {lastRefresh}{refreshError ? ` • ${refreshError}` : ''}</p></div>
       <div className="actions"><button><Search size={16}/>Scan</button><button className="ghost"><BarChart3 size={16}/>Backtest</button><button className="lock"><Lock size={16}/>Live Locked</button></div>
     </header>
     <div className="stats"><Stat icon={Activity} label="ASX Market Score" value="74" sub="TRADEABLE"/><Stat icon={TrendingUp} label="Best Sector" value="Banks" sub="HOT"/><Stat icon={Target} label="A-Grade Setups" value="2" sub="TODAY"/><Stat icon={ShieldCheck} label="Risk Per Trade" value="0.50%" sub="SAFE"/><Stat icon={WalletCards} label="Paper Equity" value={money(paperEquity)} sub="$5K START"/></div>

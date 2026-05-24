@@ -1,29 +1,26 @@
-# Render deployment
+# Render Deployment
 
-The project is a monorepo:
+## Recommended setup
 
-- frontend app: `frontend/`
-- Python API: `src/asx_trade_finder/`
+Create two Render services:
 
-## Why the previous Render build failed
+1. **Backend API** as a Python Web Service
+2. **Frontend** as a Static Site
 
-Render tried to run `npm install` from the repository root and looked for:
+## Backend API service
 
-```text
-/opt/render/project/src/package.json
-```
-
-The old repo only had `frontend/package.json`, so Render failed with:
+Use these settings:
 
 ```text
-ENOENT: no such file or directory, open '/opt/render/project/src/package.json'
+Root Directory: leave blank
+Build Command: pip install -r requirements.txt && pip install -e .
+Start Command: uvicorn asx_trade_finder.api:app --host 0.0.0.0 --port $PORT
+Health Check Path: /health
 ```
 
-This version fixes that by adding a root `package.json` that forwards build/start commands to the frontend.
+## Frontend static site
 
-## Easiest frontend deploy
-
-Create a Render Static Site and use:
+Use these settings:
 
 ```text
 Root Directory: frontend
@@ -31,28 +28,31 @@ Build Command: npm ci && npm run build
 Publish Directory: dist
 ```
 
-## Easiest API deploy
-
-Create a Render Web Service and use:
+Add this environment variable after your backend URL is known:
 
 ```text
-Runtime: Python
-Build Command: pip install -r requirements.txt && pip install -e .
-Start Command: uvicorn asx_trade_finder.api:app --host 0.0.0.0 --port $PORT
+VITE_API_BASE_URL=https://YOUR-BACKEND-SERVICE.onrender.com
 ```
 
-## Blueprint deploy
+## If you deploy the frontend as a Web Service by mistake
 
-A `render.yaml` file is included at the repo root. Render can use it to create both services.
+The root `package.json` now supports this too.
 
-## Root deploy fallback
+Use:
 
-If Render still builds from the repo root, the root `package.json` supports:
-
-```bash
-npm install
-npm run build
-npm start
+```text
+Build Command: npm run build
+Start Command: npm start
 ```
 
-That will build and serve the frontend from `frontend/`.
+The start script installs frontend dependencies if missing, builds `dist` if missing, and then runs Vite preview on Render's `$PORT`.
+
+## Previous error fixed
+
+If Render shows this:
+
+```text
+sh: 1: vite: not found
+```
+
+It means the frontend dependencies were not installed before `npm start`. This repo now fixes that by making the root `start` command run `npm ci` inside `frontend` when `node_modules` is missing.

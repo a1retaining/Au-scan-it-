@@ -1,4 +1,4 @@
-.PHONY: install test scan backtest api frontend-build clean
+.PHONY: install test scan backtest api frontend-build keepalive clean
 
 install:
 	python -m pip install --upgrade pip
@@ -19,6 +19,9 @@ api:
 
 frontend-build:
 	cd frontend && npm install && npm run build
+
+keepalive:
+	python scripts/keepalive_render.py
 
 clean:
 	find . -type d -name __pycache__ -prune -exec rm -rf {} +
