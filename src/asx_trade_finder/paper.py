@@ -238,11 +238,24 @@ class PaperAccount:
         }
 
     def mark_to_market(self, last_prices: Dict[str, float]) -> Dict[str, float]:
+        open_positions = []
+        for pos in self.positions.values():
+            last = float(last_prices.get(pos.ticker, pos.avg_price))
+            data = asdict(pos)
+            data["last_price"] = round(last, 4)
+            data["market_value"] = round(pos.market_value(last), 2)
+            data["unrealized_pnl"] = round(pos.unrealized_pnl(last), 2)
+            open_positions.append(data)
+        closed_trades = [t.to_dict() for t in self.trades if t.status == "CLOSED"]
+        open_trades = [t.to_dict() for t in self.trades if t.status == "OPEN"]
         return {
             "cash": round(self.cash, 2),
             "equity": round(self.equity(last_prices), 2),
             "starting_cash": round(self.starting_cash, 2),
-            "open_positions": len(self.positions),
+            "open_positions": open_positions,
+            "open_position_count": len(self.positions),
+            "open_trades": open_trades,
+            "closed_trades": closed_trades,
             "open_risk": round(self.risk.total_open_risk(self.positions.values(), last_prices), 2),
             "consecutive_losses": self.consecutive_losses(),
             "stats": self.stats(),

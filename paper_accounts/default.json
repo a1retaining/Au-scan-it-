@@ -1,0 +1,11 @@
+{
+  "name": "default",
+  "starting_cash": 5000,
+  "cash": 5000,
+  "positions": {},
+  "orders": {},
+  "fills": [],
+  "trades": [],
+  "closed_pnl": [],
+  "alerts": []
+}

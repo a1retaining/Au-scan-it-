@@ -89,7 +89,7 @@ const server = createServer(async (req, res) => {
   try {
     if (req.url === '/health' || req.url === '/keepalive' || req.url === '/version') {
       res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ ok: true, service: 'asx-trade-finder-frontend', build_id: 'AU-ASX-INSTITUTIONAL-DESK-V21', time: new Date().toISOString(), api_proxy_target: Boolean(apiProxyTarget) }));
+      res.end(JSON.stringify({ ok: true, service: 'asx-trade-finder-frontend', build_id: 'AU-ASX-INSTITUTIONAL-DESK-V22', time: new Date().toISOString(), api_proxy_target: Boolean(apiProxyTarget) }));
       return;
     }
 
@@ -171,9 +171,13 @@ const server = createServer(async (req, res) => {
         let price = base * (0.94 + (h % 5) * 0.012);
         let ma20 = price;
         const prices = Array.from({ length: 100 }, (_, i) => {
+          const prev = price;
           price = price + trend + (Math.sin((i + phase) / (3.5 + (h % 4))) + Math.cos((i + phase) / (6.5 + (h % 5)))) * amp * 0.12;
+          const open = prev + Math.sin((i + phase) / 2.8) * amp * 0.08;
+          const high = Math.max(open, price) + (0.16 + ((h + i) % 5) * 0.04) * Math.max(1, base / 60);
+          const low = Math.min(open, price) - (0.14 + ((h + i) % 4) * 0.04) * Math.max(1, base / 60);
           ma20 = ma20 * 0.88 + price * 0.12;
-          return { date: i + 1, close: Number(price.toFixed(2)), ma20: Number(ma20.toFixed(2)), volume: Math.round(550000 + ((Math.sin(i / 2 + phase) + 1) * 140000) + i * (800 + (h % 8) * 100)) };
+          return { date: i + 1, open: Number(open.toFixed(2)), high: Number(high.toFixed(2)), low: Number(low.toFixed(2)), close: Number(price.toFixed(2)), ma20: Number(ma20.toFixed(2)), volume: Math.round(550000 + ((Math.sin(i / 2 + phase) + 1) * 140000) + i * (800 + (h % 8) * 100)) };
         });
         json(200, { ticker, mode: 'local_frontend_fallback', prices });
         return;

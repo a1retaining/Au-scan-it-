@@ -18,6 +18,7 @@ from .market_clock import get_market_clock
 from .audit import AuditLog
 from .data_quality import assess_price_data
 from .institutional import institutional_readiness, signal_risk_book, pre_trade_check
+from .auto_paper import latest_prices_from_signals, run_auto_paper_cycle
 
 app = FastAPI(title="ASX Trade Finder API", version="0.8.0")
 
@@ -36,6 +37,8 @@ PAPER_PATH = Path(os.getenv("ASX_PAPER_ACCOUNT", "paper_accounts/default.json"))
 DATA_PROVIDER = os.getenv("ASX_DATA_PROVIDER", "csv")
 DATA_PERIOD = os.getenv("ASX_HISTORY_PERIOD", "10y")
 SCAN_INTERVAL_SECONDS = int(os.getenv("ASX_SCAN_INTERVAL_SECONDS", "60"))
+AUTO_PAPER_ENABLED = os.getenv("ASX_AUTO_PAPER_ENABLED", "true").lower() in {"1", "true", "yes", "on"}
+AUTO_PAPER_MAX_ENTRIES = int(os.getenv("ASX_AUTO_PAPER_MAX_ENTRIES_PER_SCAN", "2"))
 AUDIT_PATH = Path(os.getenv("ASX_AUDIT_LOG", "outputs/audit_log.jsonl"))
 audit = AuditLog(AUDIT_PATH)
 
@@ -94,6 +97,25 @@ def save_account(account: PaperAccount) -> None:
     account.save(PAPER_PATH)
 
 
+def run_auto_paper(rows: list[dict], market_open: bool) -> dict:
+    account = get_account()
+    result = run_auto_paper_cycle(
+        account,
+        rows,
+        market_open=market_open,
+        enabled=AUTO_PAPER_ENABLED,
+        max_entries=AUTO_PAPER_MAX_ENTRIES,
+    )
+    if result.get("events"):
+        audit.record("AUTO_PAPER_CYCLE", {"entries": result.get("entries"), "exits": result.get("exits"), "events": result.get("events")})
+    save_account(account)
+    return result
+
+
+def cached_last_prices() -> dict[str, float]:
+    return latest_prices_from_signals(_scan_cache.get("signals") or [])
+
+
 def _watchlist_path() -> Path:
     return WATCHLIST if WATCHLIST.exists() else SAMPLE_WATCHLIST
 
@@ -113,6 +135,7 @@ def run_scan(provider: str | None = None, period: str | None = None, force: bool
         try:
             df = scan_watchlist(_watchlist_path(), PRICES, kind, hist)
             data = df.to_dict(orient="records")
+            auto_paper = run_auto_paper(data, bool(clock.get("is_open")))
             payload = {
                 "ok": True,
                 "refreshed_at": datetime.now(timezone.utc).isoformat(),
@@ -124,8 +147,9 @@ def run_scan(provider: str | None = None, period: str | None = None, force: bool
                 "review_only": not bool(clock.get("is_open")),
                 "count": len(data),
                 "signals": data,
+                "auto_paper": auto_paper,
                 "error": None,
-                "message": "Market is closed, showing last review candidates." if not clock.get("is_open") else "Market is open, showing active scan candidates.",
+                "message": "Market is closed, showing last review candidates. Auto paper entries are paused; exits still check latest prices." if not clock.get("is_open") else "Market is open, auto paper rules are active.",
             }
         except Exception as exc:
             # Keep the app useful rather than blank. Fall back to the bundled CSV
@@ -144,6 +168,7 @@ def run_scan(provider: str | None = None, period: str | None = None, force: bool
                     "review_only": True,
                     "count": len(data),
                     "signals": data,
+                    "auto_paper": {"enabled": AUTO_PAPER_ENABLED, "entries": 0, "exits": 0, "events": [], "message": "Auto paper did not enter from fallback error scan."},
                     "error": str(exc),
                     "message": "Real data provider failed, showing bundled sample scan so the dashboard does not go blank.",
                 }
@@ -266,10 +291,27 @@ def prices(ticker: str, provider: str | None = None, period: str | None = None):
     return {"ticker": ticker.upper(), "provider": kind, "period": hist, "count": len(df), "prices": df.to_dict(orient="records")}
 
 
+@app.get("/paper/auto")
+def paper_auto_status():
+    return {
+        "enabled": AUTO_PAPER_ENABLED,
+        "max_entries_per_scan": AUTO_PAPER_MAX_ENTRIES,
+        "market_clock": get_market_clock(),
+        "last_scan": _scan_cache.get("refreshed_at"),
+        "last_auto_paper": _scan_cache.get("auto_paper"),
+    }
+
+
+@app.post("/paper/auto/run")
+def paper_auto_run():
+    cached = signals(force=True)
+    return {"ok": True, "auto_paper": cached.get("auto_paper"), "paper": get_account().mark_to_market(cached_last_prices())}
+
+
 @app.get("/paper")
 def paper_account():
     account = get_account()
-    result = account.mark_to_market({})
+    result = account.mark_to_market(cached_last_prices())
     result["market_clock"] = get_market_clock()
     return result
 

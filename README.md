@@ -310,3 +310,15 @@ See `docs/HEDGE_FUND_GRADE_UPGRADE.md`.
 
 ## V18 visual verification
 After deployment, the frontend must show `AU-ASX-INSTITUTIONAL-DESK-V18` in the top-left build tag. The `/health` endpoint must return `build_id: AU-ASX-INSTITUTIONAL-DESK-V18`. If it does not, Render is serving an old build, wrong branch, or wrong service.
+
+## v22 auto paper trading and candlestick chart
+
+v22 adds a real candlestick chart view and an automatic paper-trading cycle. The paper trader enters READY/ARMED signals when the ASX market is open and exits when stop or target is hit by the latest scan price. It remains paper-only and broker execution is still locked.
+
+Useful settings:
+
+```text
+ASX_AUTO_PAPER_ENABLED=true
+ASX_AUTO_PAPER_MAX_ENTRIES_PER_SCAN=2
+ASX_SCAN_INTERVAL_SECONDS=60
+```

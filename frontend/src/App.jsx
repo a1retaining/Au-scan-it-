@@ -37,7 +37,7 @@ import './styles.css';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (typeof window !== 'undefined' ? window.location.origin : '');
 const AUTO_REFRESH_MS = Number(import.meta.env.VITE_AUTO_REFRESH_MS || 60000);
-const BUILD_ID = 'AU-ASX-INSTITUTIONAL-DESK-V21';
+const BUILD_ID = 'AU-ASX-INSTITUTIONAL-DESK-V22';
 
 const fallbackSignals = [
   { ticker: 'CBA', name: 'Commonwealth Bank', sector: 'Banks', score: 88, confidence: 82, status: 'REVIEW', setup: 'Pullback to value', price: 123.4, entry: 123.2, stop: 119.8, target: 132.7, rr: 2.79, volume: 1.3, change: 0.8, keyZone: '$122.40 to $124.10', why: ['Trend structure still positive', 'Banks sector holding up better than market', 'Price is near a defined buy zone'], risks: ['Market is closed, no entry now', 'Needs fresh liquidity check at open'] },
@@ -125,13 +125,26 @@ function buildChart(seed = 100, ticker = 'ASX') {
   const phase = (h % 19) / 3;
   const vol = 0.55 + (h % 7) * 0.16;
   const trend = ((h % 11) - 3) * 0.025;
-  let price = Number(seed || 100) * (0.94 + (h % 5) * 0.015);
-  let ma = price;
+  let close = Number(seed || 100) * (0.94 + (h % 5) * 0.015);
+  let ma = close;
   for (let i = 0; i < 100; i += 1) {
+    const prevClose = close;
     const shock = Math.sin((i + phase) / (3.6 + (h % 5))) * vol + Math.cos((i + phase) / (7.5 + (h % 3))) * vol * 0.7;
-    price = price + trend + shock * 0.16;
-    ma = ma * 0.88 + price * 0.12;
-    rows.push({ day: i + 1, price: Number(price.toFixed(2)), ma20: Number(ma.toFixed(2)), vol: Math.round(550000 + ((Math.sin(i / 2 + phase) + 1) * 150000) + i * (900 + (h % 9) * 150)) });
+    close = close + trend + shock * 0.16;
+    const open = prevClose + Math.sin((i + phase) / 2.9) * vol * 0.07;
+    const high = Math.max(open, close) + (0.18 + ((h + i) % 5) * 0.045) * Math.max(1, seed / 60);
+    const low = Math.min(open, close) - (0.16 + ((h + i) % 4) * 0.045) * Math.max(1, seed / 60);
+    ma = ma * 0.88 + close * 0.12;
+    rows.push({
+      day: i + 1,
+      open: Number(open.toFixed(2)),
+      high: Number(high.toFixed(2)),
+      low: Number(low.toFixed(2)),
+      close: Number(close.toFixed(2)),
+      price: Number(close.toFixed(2)),
+      ma20: Number(ma.toFixed(2)),
+      vol: Math.round(550000 + ((Math.sin(i / 2 + phase) + 1) * 150000) + i * (900 + (h % 9) * 150)),
+    });
   }
   return rows;
 }
@@ -186,7 +199,7 @@ function ScoreBar({ value }) {
   return <div className="scorebar"><i style={{ width: `${Math.max(0, Math.min(100, Number(value || 0)))}%` }} /></div>;
 }
 
-function TopBar({ clock, paper, signals, apiState, lastRefresh, paused, setPaused, refresh, audioArmed }) {
+function TopBar({ clock, paper, signals, apiState, lastRefresh, paused, setPaused, refresh, audioArmed, autoPaper }) {
   const open = Boolean(clock?.is_open);
   const ready = signals.filter((s) => ['READY', 'ARMED', 'REVIEW'].includes(String(s.status).toUpperCase())).length;
   return (
@@ -200,6 +213,7 @@ function TopBar({ clock, paper, signals, apiState, lastRefresh, paused, setPause
         <Metric label="ASX session" value={open ? 'OPEN' : 'CLOSED'} sub={open ? `closes in ${countdown(clock?.seconds_to_close)}` : `opens in ${countdown(clock?.seconds_to_open)}`} toneClass={open ? 'good' : 'warn'} />
         <Metric label="Signal book" value={signals.length} sub={`${ready} reviewable`} />
         <Metric label="Paper book" value={money(paper?.equity ?? 5000)} sub="$5,000 start" />
+        <Metric label="Auto paper" value={autoPaper?.enabled === false ? 'OFF' : 'ON'} sub={autoPaper?.market_open ? 'entry/exit active' : 'exit check only'} toneClass={autoPaper?.enabled === false ? 'bad' : 'good'} />
         <Metric label="Next refresh" value={`${AUTO_REFRESH_MS / 1000}s`} sub={paused ? 'paused' : 'running'} />
       </div>
       <div className="topActions">
@@ -265,6 +279,63 @@ function SignalBook({ signals, selected, onSelect }) {
   );
 }
 
+function CandleChart({ data, selected }) {
+  const rows = (data?.length ? data : buildChart(Number(selected?.entry || 100), selected?.ticker)).slice(-100);
+  const width = 1100;
+  const height = 430;
+  const pad = { left: 58, right: 28, top: 18, bottom: 58 };
+  const chartH = height - pad.top - pad.bottom - 70;
+  const volTop = pad.top + chartH + 22;
+  const volH = 46;
+  const highs = rows.map((r) => Number(r.high ?? r.close ?? r.price));
+  const lows = rows.map((r) => Number(r.low ?? r.close ?? r.price));
+  const lineVals = rows.map((r) => Number(r.ma20 || r.close || r.price)).filter(Number.isFinite);
+  const minP = Math.min(...lows, ...lineVals, Number(selected?.stop || Infinity)) * 0.995;
+  const maxP = Math.max(...highs, ...lineVals, Number(selected?.target || 0)) * 1.005;
+  const xStep = (width - pad.left - pad.right) / Math.max(rows.length, 1);
+  const candleW = Math.max(3, Math.min(10, xStep * 0.58));
+  const y = (price) => pad.top + (maxP - price) / Math.max(maxP - minP, 0.01) * chartH;
+  const x = (i) => pad.left + i * xStep + xStep / 2;
+  const vols = rows.map((r) => Number(r.vol || r.volume || 0));
+  const maxVol = Math.max(...vols, 1);
+  const maPath = rows.map((r, i) => `${i === 0 ? 'M' : 'L'} ${x(i).toFixed(1)} ${y(Number(r.ma20 || r.close || r.price)).toFixed(1)}`).join(' ');
+  const levels = [
+    ['ENTRY', selected?.entry, '#39a7ff'],
+    ['STOP', selected?.stop, '#ff4d6d'],
+    ['TARGET', selected?.target, '#26d07c'],
+  ].filter(([, value]) => Number(value));
+  const grid = Array.from({ length: 5 }, (_, i) => minP + (maxP - minP) * (i / 4));
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} className="candleSvg" role="img" aria-label={`${selected?.ticker} candlestick chart`}>
+      <rect x="0" y="0" width={width} height={height} rx="18" fill="#050915" />
+      {grid.map((g) => <g key={g}><line x1={pad.left} x2={width - pad.right} y1={y(g)} y2={y(g)} stroke="rgba(148,163,184,.12)" /><text x="8" y={y(g) + 4} fill="#7b8aaa" fontSize="12">{money(g)}</text></g>)}
+      {rows.map((r, i) => {
+        const open = Number(r.open ?? r.close ?? r.price);
+        const high = Number(r.high ?? r.close ?? r.price);
+        const low = Number(r.low ?? r.close ?? r.price);
+        const close = Number(r.close ?? r.price);
+        const up = close >= open;
+        const cx = x(i);
+        const bodyY = Math.min(y(open), y(close));
+        const bodyH = Math.max(2, Math.abs(y(open) - y(close)));
+        const color = up ? '#23f0a0' : '#ff4d6d';
+        const volHeight = Math.max(1, (Number(r.vol || r.volume || 0) / maxVol) * volH);
+        return <g key={i}>
+          <line x1={cx} x2={cx} y1={y(high)} y2={y(low)} stroke={color} strokeWidth="1.4" />
+          <rect x={cx - candleW / 2} y={bodyY} width={candleW} height={bodyH} rx="1.5" fill={color} opacity="0.95" />
+          <rect x={cx - candleW / 2} y={volTop + volH - volHeight} width={candleW} height={volHeight} fill={color} opacity="0.23" />
+        </g>;
+      })}
+      <path d={maPath} fill="none" stroke="#f5c542" strokeWidth="2" />
+      {levels.map(([label, value, color]) => <g key={label}>
+        <line x1={pad.left} x2={width - pad.right} y1={y(Number(value))} y2={y(Number(value))} stroke={color} strokeDasharray="7 5" strokeWidth="1.5" />
+        <text x={width - pad.right - 74} y={y(Number(value)) - 7} fill={color} fontSize="14" fontWeight="800">{label}</text>
+      </g>)}
+      <text x={pad.left} y={height - 18} fill="#7b8aaa" fontSize="12">Candles: open, high, low, close • blue/yellow line: 20-period average • bars: volume</text>
+    </svg>
+  );
+}
+
 function DeskChart({ selected, chart }) {
   const data = chart?.length ? chart : buildChart(Number(selected?.entry || 100), selected?.ticker);
   return (
@@ -276,23 +347,7 @@ function DeskChart({ selected, chart }) {
         </div>
         <div className="chartStats"><StatusPill status={selected?.status} /><b>{selected?.score || 0}</b></div>
       </div>
-      <div className="chartBox">
-        <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={data}>
-            <CartesianGrid stroke="rgba(148,163,184,.12)" vertical={false} />
-            <XAxis dataKey="day" tick={{ fill: '#7b8aaa', fontSize: 11 }} />
-            <YAxis yAxisId="price" domain={['dataMin - 2', 'dataMax + 2']} tick={{ fill: '#7b8aaa', fontSize: 11 }} />
-            <YAxis yAxisId="vol" orientation="right" hide />
-            <Tooltip contentStyle={{ background: '#08111f', border: '1px solid #25416a', color: '#eaf2ff' }} />
-            {selected?.entry ? <ReferenceLine yAxisId="price" y={selected.entry} stroke="#39a7ff" strokeDasharray="5 4" label={{ value: 'ENTRY', fill: '#39a7ff', position: 'insideTopRight' }} /> : null}
-            {selected?.stop ? <ReferenceLine yAxisId="price" y={selected.stop} stroke="#ff4d6d" strokeDasharray="5 4" label={{ value: 'STOP', fill: '#ff4d6d', position: 'insideBottomRight' }} /> : null}
-            {selected?.target ? <ReferenceLine yAxisId="price" y={selected.target} stroke="#26d07c" strokeDasharray="5 4" label={{ value: 'TARGET', fill: '#26d07c', position: 'insideTopRight' }} /> : null}
-            <Bar yAxisId="vol" dataKey="vol" fill="rgba(57,167,255,.18)" />
-            <Area yAxisId="price" type="monotone" dataKey="price" stroke="#39a7ff" fill="rgba(57,167,255,.14)" strokeWidth={2.5} />
-            <Line yAxisId="price" type="monotone" dataKey="ma20" stroke="#f5c542" strokeWidth={1.5} dot={false} />
-          </ComposedChart>
-        </ResponsiveContainer>
-      </div>
+      <div className="chartBox candleBox"><CandleChart data={data} selected={selected} /></div>
     </section>
   );
 }
@@ -315,11 +370,11 @@ function TradePlan({ selected, clock, onPaper, onRead }) {
         <Metric label="Est. cost drag" value={money(roundTrip)} sub="brokerage + slippage" />
         <Metric label="Paper qty" value={qty} sub="based on $25 risk" />
       </div>
-      <div className="noteBlock"><b>Why it is on the desk</b>{(selected?.why?.length ? selected.why : ['Scanner produced a review candidate.']).map((x) => <p key={x}>• {x}</p>)}</div>
+      <div className="noteBlock"><b>Auto paper rule</b><p>• The paper account auto-enters READY/ARMED setups when the ASX is open and pre-trade risk passes.</p><p>• It auto-exits when stop or target is hit by the latest scan price.</p></div><div className="noteBlock"><b>Why it is on the desk</b>{(selected?.why?.length ? selected.why : ['Scanner produced a review candidate.']).map((x) => <p key={x}>• {x}</p>)}</div>
       <div className="noteBlock warning"><b>Risk notes</b>{(selected?.risks?.length ? selected.risks : ['No extra risk notes returned.']).map((x) => <p key={x}>• {x}</p>)}</div>
       <div className="planActions">
         <button onClick={onRead}><Headphones size={15} />Read setup</button>
-        <button className="paper" disabled={!canEnter} onClick={() => onPaper(selected)}>{canEnter ? 'Send to paper' : 'Review only'}</button>
+        <button className="paper" disabled={!canEnter} onClick={() => onPaper(selected)}>{canEnter ? 'Manual paper' : 'Review only'}</button>
       </div>
     </aside>
   );
@@ -384,6 +439,7 @@ function App() {
   const [paused, setPaused] = useState(false);
   const [audioArmed, setAudioArmed] = useState(false);
   const [alert, setAlert] = useState(null);
+  const [autoPaper, setAutoPaper] = useState({ enabled: true, market_open: false, entries: 0, exits: 0, events: [] });
   const timer = useRef(null);
 
   const armOnce = async () => {
@@ -414,11 +470,22 @@ function App() {
       setSelected((old) => nextRows.find((x) => x.ticker === old?.ticker) || nextRows[0]);
       setClock(clk || defaultClock);
       setPaper(ppr || defaultPaper);
+      const nextAuto = sig.auto_paper || { enabled: true, events: [] };
+      setAutoPaper(nextAuto);
+      if (audioArmed && Array.isArray(nextAuto.events) && nextAuto.events.length) {
+        const latest = nextAuto.events[nextAuto.events.length - 1];
+        const type = String(latest.event_type || '').includes('EXIT') ? 'exit' : 'entry';
+        tone(type);
+        speak(latest.message || `${latest.ticker || 'Paper trade'} ${type} alert.`);
+        setAlert(latest.message || `${latest.ticker || 'Paper trade'} ${type} alert.`);
+        setTimeout(() => setAlert(null), 60000);
+      }
       setApiState(sig.mode || 'backend connected');
       setLastRefresh(new Date().toLocaleTimeString());
     } catch (err) {
       setSignals(fallbackSignals);
       setSelected((old) => fallbackSignals.find((x) => x.ticker === old?.ticker) || fallbackSignals[0]);
+      setAutoPaper({ enabled: false, market_open: false, entries: 0, exits: 0, events: [], message: 'Backend not connected, auto paper is offline.' });
       setApiState(`local fallback: ${err.message}`);
       setLastRefresh(new Date().toLocaleTimeString());
     }
@@ -433,7 +500,13 @@ function App() {
   useEffect(() => {
     if (!selected?.ticker) return;
     fetchJson(`/prices/${selected.ticker}`).then((data) => {
-      const rows = (data.prices || data || []).map((x, i) => ({ day: i + 1, price: Number(x.close || x.price || x.Price || 0), ma20: Number(x.ma20 || x.close || x.price || 0), vol: Number(x.volume || 0) })).filter((x) => x.price);
+      const rows = (data.prices || data || []).map((x, i) => {
+        const close = Number(x.close || x.price || x.Close || x.Price || 0);
+        const open = Number(x.open || x.Open || close);
+        const high = Number(x.high || x.High || Math.max(open, close));
+        const low = Number(x.low || x.Low || Math.min(open, close));
+        return { day: i + 1, open, high, low, close, price: close, ma20: Number(x.ma20 || x.sma20 || close), vol: Number(x.volume || x.Volume || 0) };
+      }).filter((x) => x.close);
       setChart(rows.length ? rows.slice(-120) : buildChart(Number(selected.entry || 100), selected.ticker));
     }).catch(() => setChart(buildChart(Number(selected.entry || 100), selected.ticker)));
   }, [selected?.ticker]);
@@ -471,7 +544,7 @@ function App() {
 
   return (
     <main className="appShell" onClick={armOnce}>
-      <TopBar clock={clock} paper={paper} signals={sorted} apiState={apiState} lastRefresh={lastRefresh} paused={paused} setPaused={setPaused} refresh={refresh} audioArmed={audioArmed} />
+      <TopBar clock={clock} paper={paper} signals={sorted} apiState={apiState} lastRefresh={lastRefresh} paused={paused} setPaused={setPaused} refresh={refresh} audioArmed={audioArmed} autoPaper={autoPaper} />
       {alert && <div className="tradeToast"><Bell size={18} /><span>{alert}</span><button onClick={() => setAlert(null)}>close</button></div>}
       <div className="deskGrid">
         <PriorityQueue signals={sorted} selected={selected} onSelect={selectSignal} />
