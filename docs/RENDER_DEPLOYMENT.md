@@ -58,3 +58,7 @@ Fix: Use root `npm run build` and root `npm start`. The root build installs fron
 Cause: the start command did not bind a server to `$PORT`.
 
 Fix: root `npm start` runs `node server.mjs`, which listens on `0.0.0.0:$PORT` and serves `frontend/dist`.
+
+
+## V18 visual verification
+After deployment, the frontend must show `AU-ASX-INSTITUTIONAL-DESK-V18` in the top-left build tag. The `/health` endpoint must return `build_id: AU-ASX-INSTITUTIONAL-DESK-V18`. If it does not, Render is serving an old build, wrong branch, or wrong service.

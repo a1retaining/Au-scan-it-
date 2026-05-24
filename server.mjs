@@ -33,9 +33,9 @@ function safeJoin(base, requestedPath) {
 
 const server = createServer(async (req, res) => {
   try {
-    if (req.url === '/health' || req.url === '/keepalive') {
+    if (req.url === '/health' || req.url === '/keepalive' || req.url === '/version') {
       res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ ok: true, service: 'asx-trade-finder-frontend', time: new Date().toISOString(), api_proxy_target: Boolean(apiProxyTarget) }));
+      res.end(JSON.stringify({ ok: true, service: 'asx-trade-finder-frontend', build_id: 'AU-ASX-INSTITUTIONAL-DESK-V19', time: new Date().toISOString(), api_proxy_target: Boolean(apiProxyTarget) }));
       return;
     }
 
@@ -63,7 +63,9 @@ const server = createServer(async (req, res) => {
     const data = await readFile(filePath);
     res.writeHead(200, {
       'content-type': contentTypes[ext] || 'application/octet-stream',
-      'cache-control': ext === '.html' ? 'no-cache' : 'public, max-age=31536000, immutable',
+      'cache-control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+      'pragma': 'no-cache',
+      'expires': '0',
     });
     res.end(data);
   } catch (error) {

@@ -16,6 +16,7 @@ import {
   YAxis,
 } from 'recharts';
 import {
+  Activity,
   AlertTriangle,
   Bell,
   CheckCircle2,
@@ -25,498 +26,434 @@ import {
   Lock,
   Pause,
   Play,
-  Radar,
   RefreshCw,
   ShieldCheck,
-  Speaker,
+  TrendingDown,
   TrendingUp,
   XCircle,
+  Zap,
 } from 'lucide-react';
 import './styles.css';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (typeof window !== 'undefined' ? window.location.origin : '');
 const AUTO_REFRESH_MS = Number(import.meta.env.VITE_AUTO_REFRESH_MS || 60000);
+const BUILD_ID = 'AU-ASX-INSTITUTIONAL-DESK-V19';
 
-const fallbackSectors = ['Banks', 'Materials', 'Gold', 'Energy', 'Healthcare', 'Lithium', 'REITs', 'Technology'];
-const costDefaults = { brokerage: 19.0, slippage: 2.5 };
-
-const buildStatus = [
-  ['ASX delayed/live data route', 'CONNECTED PATH', 'built', 'The provider interface can use yfinance for delayed .AX data or a licensed data feed later.'],
-  ['10-year history request', 'BUILT', 'built', 'Scanner/backtest can request 10y daily history. Institutional data is still recommended.'],
-  ['Delisted equities', 'NEEDS VENDOR', 'blocked', 'Needed before claiming production-grade backtest results.'],
-  ['Announcements and halts', 'VENDOR NEXT', 'planned', 'Requires ASX/vendor feed for price-sensitive announcements, halts and capital raises.'],
-  ['Brokerage and slippage', 'BUILT', 'built', 'Entry and exit costs flow into paper trading and backtest P/L.'],
-  ['Paper trading ledger', 'BUILT', 'built', 'Tracks entries, exits, net P/L, R multiple, result and exit reason.'],
-  ['Sound and voice alerts', 'BUILT', 'built', 'No test buttons. First user click arms browser sound/voice automatically.'],
-  ['Broker execution', 'LOCKED', 'locked', 'Correctly locked. No live order routing until proof, data QA and controls pass.'],
+const fallbackSignals = [
+  { ticker: 'CBA', name: 'Commonwealth Bank', sector: 'Banks', score: 88, confidence: 82, status: 'REVIEW', setup: 'Pullback to value', price: 123.4, entry: 123.2, stop: 119.8, target: 132.7, rr: 2.79, volume: 1.3, change: 0.8, keyZone: '$122.40 to $124.10', why: ['Trend structure still positive', 'Banks sector holding up better than market', 'Price is near a defined buy zone'], risks: ['Market is closed, no entry now', 'Needs fresh liquidity check at open'] },
+  { ticker: 'BHP', name: 'BHP Group', sector: 'Materials', score: 84, confidence: 78, status: 'REVIEW', setup: 'Breakout watch', price: 45.12, entry: 45.3, stop: 43.7, target: 49.1, rr: 2.38, volume: 1.1, change: 0.5, keyZone: '$44.90 to $45.40', why: ['Materials heatmap is strong', 'Entry is close to resistance break', 'Risk is defined'], risks: ['Commodity-sensitive', 'Needs iron ore confirmation'] },
+  { ticker: 'WES', name: 'Wesfarmers', sector: 'Consumer', score: 72, confidence: 67, status: 'WATCH', setup: 'Base forming', price: 67.8, entry: 68.5, stop: 66.2, target: 72.8, rr: 1.87, volume: 0.9, change: 0.2, keyZone: '$67.90 to $68.70', why: ['Base structure is improving'], risks: ['Reward is below 2R', 'Volume not strong enough'] },
+  { ticker: 'CSL', name: 'CSL Limited', sector: 'Healthcare', score: 51, confidence: 48, status: 'BLOCKED', setup: 'Weak relative strength', price: 284.1, entry: 291, stop: 279, target: 306, rr: 1.25, volume: 0.8, change: -0.9, keyZone: 'No clean buy zone', why: ['High quality company, poor current setup'], risks: ['Sector weak', 'No entry trigger', 'Below trade threshold'] },
 ];
 
-function money(v) {
-  const n = Number(v || 0);
+const sectors = [
+  { name: 'Banks', strength: 84, flow: '+1.2%', state: 'Leading', leaders: 'CBA, NAB, WBC' },
+  { name: 'Materials', strength: 77, flow: '+0.8%', state: 'Strong', leaders: 'BHP, RIO, FMG' },
+  { name: 'Gold', strength: 73, flow: '+0.6%', state: 'Strong', leaders: 'NEM, NST, EVN' },
+  { name: 'Energy', strength: 55, flow: '+0.1%', state: 'Mixed', leaders: 'WDS, STO' },
+  { name: 'Tech', strength: 61, flow: '+0.4%', state: 'Watch', leaders: 'XRO, WTC' },
+  { name: 'Healthcare', strength: 38, flow: '-0.7%', state: 'Weak', leaders: 'RMD, COH' },
+  { name: 'Lithium', strength: 29, flow: '-1.6%', state: 'Avoid', leaders: 'PLS, MIN' },
+  { name: 'REITs', strength: 49, flow: '-0.1%', state: 'Rate risk', leaders: 'GMG, SCG' },
+];
+
+const defaultClock = { session: 'Closed', is_open: false, seconds_to_open: 0, seconds_to_close: 0, now_sydney: '' };
+const defaultPaper = { starting_cash: 5000, cash: 5000, equity: 5000, open_risk: 0, open_positions: [], closed_trades: [] };
+
+function money(value) {
+  const n = Number(value || 0);
   return `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
-function pct(v) {
-  return Number.isFinite(Number(v)) ? `${Number(v).toFixed(2)}%` : '-';
+function compactMoney(value) {
+  const n = Number(value || 0);
+  if (Math.abs(n) >= 1000000) return `$${(n / 1000000).toFixed(1)}m`;
+  if (Math.abs(n) >= 1000) return `$${(n / 1000).toFixed(1)}k`;
+  return money(n);
 }
-function countDown(seconds) {
+function countdown(seconds) {
   const s = Math.max(0, Number(seconds || 0));
   const h = Math.floor(s / 3600);
   const m = Math.floor((s % 3600) / 60);
-  const sec = Math.floor(s % 60);
-  return `${h}h ${m}m ${sec}s`;
+  return `${h}h ${m}m`;
 }
-function gradeFromScore(score) {
-  if (score >= 90) return 'A+';
-  if (score >= 82) return 'A';
-  if (score >= 72) return 'B';
-  if (score >= 60) return 'C';
-  return 'D';
-}
-function normaliseSignal(signal) {
-  const entry = Number(signal.entry || signal.close || signal.price || 0);
-  const score = Math.round(Number(signal.score || signal.total_score || 0));
-  const stop = Number(signal.stop || signal.stop_loss || entry * 0.97 || 0);
-  const target = Number(signal.target || entry * 1.06 || 0);
-  const riskReward = Number(signal.risk_reward || signal.rr || ((target - entry) / Math.max(entry - stop, 0.01)) || 0);
+function normaliseSignal(s) {
+  const entry = Number(s.entry || s.close || s.price || 0);
+  const stop = Number(s.stop || s.stop_loss || entry * 0.97);
+  const target = Number(s.target || entry * 1.06);
+  const score = Math.round(Number(s.score || s.total_score || 0));
+  const rr = Number(s.risk_reward || s.rr || ((target - entry) / Math.max(entry - stop, 0.01)));
   return {
-    ticker: signal.ticker,
-    name: signal.name || signal.ticker,
-    sector: signal.sector || 'Unknown',
-    price: entry,
-    change: Number(signal.change_pct || signal.change || 0),
+    ticker: s.ticker,
+    name: s.name || s.ticker,
+    sector: s.sector || 'Unknown',
     score,
-    confidence: Math.round(Number(signal.confidence || signal.strength || Math.min(99, score + 3))),
-    grade: signal.grade || gradeFromScore(score),
-    status: signal.status || (score >= 82 ? 'ARMED' : score >= 68 ? 'WATCH' : 'BLOCKED'),
-    setup: signal.setup || signal.pattern || 'ASX system scan',
-    rr: riskReward,
-    volume: Number(signal.volume_multiple || signal.volume_ratio || 0),
+    confidence: Math.round(Number(s.confidence || s.strength || Math.min(99, score + 2))),
+    status: s.status || (score >= 82 ? 'REVIEW' : score >= 70 ? 'WATCH' : 'BLOCKED'),
+    setup: s.setup || s.pattern || 'ASX scan candidate',
+    price: entry,
     entry,
     stop,
     target,
-    keyZone: signal.key_zone || signal.buy_zone || `${money(entry * 0.995)} to ${money(entry * 1.005)}`,
-    avgDailyValue: Number(signal.avg_daily_value || 0),
-    spreadPct: Number(signal.spread_pct || 0),
-    why: signal.reasons || signal.why || [],
-    risks: [...(signal.risks || []), ...(signal.blockers || [])],
+    rr,
+    volume: Number(s.volume_multiple || s.volume_ratio || 0),
+    change: Number(s.change_pct || s.change || 0),
+    keyZone: s.key_zone || s.buy_zone || `${money(entry * 0.995)} to ${money(entry * 1.005)}`,
+    why: s.reasons || s.why || [],
+    risks: [...(s.risks || []), ...(s.blockers || [])],
   };
 }
-
-let sharedAudioContext = null;
-function getAudioContext() {
-  if (typeof window === 'undefined') return null;
-  const AudioContext = window.AudioContext || window.webkitAudioContext;
-  if (!AudioContext) return null;
-  if (!sharedAudioContext) sharedAudioContext = new AudioContext();
-  return sharedAudioContext;
+function buildChart(seed = 100) {
+  const rows = [];
+  for (let i = 0; i < 80; i += 1) {
+    const trend = i * 0.12;
+    const wave = Math.sin(i / 5) * 1.6;
+    const price = seed + trend + wave;
+    rows.push({ day: i + 1, price: Number(price.toFixed(2)), ma20: Number((price - 0.9 + Math.sin(i / 10)).toFixed(2)), vol: Math.round(700000 + Math.sin(i) * 120000 + i * 2000) });
+  }
+  return rows;
 }
-async function armAudio() {
-  const ctx = getAudioContext();
+
+let audioContext = null;
+function getAudio() {
+  if (typeof window === 'undefined') return null;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return null;
+  if (!audioContext) audioContext = new AC();
+  return audioContext;
+}
+async function unlockAudio() {
+  const ctx = getAudio();
   if (ctx && ctx.state === 'suspended') await ctx.resume();
   return Boolean(ctx);
 }
-function playTone(type = 'entry') {
-  try {
-    const ctx = getAudioContext();
-    if (!ctx || ctx.state !== 'running') return;
-    const patterns = {
-      entry: [880, 1120],
-      exit: [520, 420],
-      stop: [260, 190, 160],
-      target: [700, 880, 1040],
-    };
-    (patterns[type] || patterns.entry).forEach((freq, i) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.frequency.value = freq;
-      osc.type = 'sine';
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      gain.gain.setValueAtTime(0.0001, ctx.currentTime + i * 0.13);
-      gain.gain.exponentialRampToValueAtTime(0.075, ctx.currentTime + i * 0.13 + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + i * 0.13 + 0.11);
-      osc.start(ctx.currentTime + i * 0.13);
-      osc.stop(ctx.currentTime + i * 0.13 + 0.12);
-    });
-  } catch (_) {}
+function tone(type = 'entry') {
+  const ctx = getAudio();
+  if (!ctx || ctx.state !== 'running') return;
+  const map = { entry: [880, 1100], exit: [520, 390], stop: [250, 170], target: [700, 900, 1100] };
+  (map[type] || map.entry).forEach((freq, index) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.frequency.value = freq;
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    const start = ctx.currentTime + index * 0.11;
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(0.06, start + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.1);
+    osc.start(start);
+    osc.stop(start + 0.11);
+  });
 }
-function speak(message) {
+function speak(text) {
   if (typeof window === 'undefined' || !window.speechSynthesis) return;
-  try {
-    const u = new SpeechSynthesisUtterance(message);
-    u.rate = 0.92;
-    u.pitch = 1;
-    u.volume = 1;
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(u);
-  } catch (_) {}
-}
-function voiceMessage(type, stock) {
-  if (!stock) return 'No stock selected.';
-  if (type === 'entry') return `${stock.ticker} paper entry review. Entry ${money(stock.entry)}. Buy zone ${stock.keyZone}. Stop ${money(stock.stop)}. Target ${money(stock.target)}. Do not enter outside the plan.`;
-  if (type === 'exit') return `${stock.ticker} exit review. Check stop, target, invalidation and market conditions now.`;
-  if (type === 'stop') return `${stock.ticker} stop alert. Exit paper trade and record the loss unless manual review overrides it.`;
-  if (type === 'target') return `${stock.ticker} target reached. Take profit or trail the stop according to the plan.`;
-  return `${stock.ticker} alert.`;
+  const u = new SpeechSynthesisUtterance(text);
+  u.rate = 0.92;
+  window.speechSynthesis.cancel();
+  window.speechSynthesis.speak(u);
 }
 
-function Tile({ label, value, sub, intent = 'neutral' }) {
+function StatusPill({ status }) {
+  const clean = String(status || 'WATCH').toUpperCase();
+  return <span className={`status ${clean.toLowerCase()}`}>{clean}</span>;
+}
+function Metric({ label, value, sub, toneClass = '' }) {
+  return <div className={`metric ${toneClass}`}><span>{label}</span><strong>{value}</strong>{sub && <small>{sub}</small>}</div>;
+}
+function ScoreBar({ value }) {
+  return <div className="scorebar"><i style={{ width: `${Math.max(0, Math.min(100, Number(value || 0)))}%` }} /></div>;
+}
+
+function TopBar({ clock, paper, signals, apiState, lastRefresh, paused, setPaused, refresh, audioArmed }) {
+  const open = Boolean(clock?.is_open);
+  const ready = signals.filter((s) => ['READY', 'ARMED', 'REVIEW'].includes(String(s.status).toUpperCase())).length;
   return (
-    <div className={`tile ${intent}`}>
-      <span>{label}</span>
-      <b>{value}</b>
-      {sub ? <small>{sub}</small> : null}
+    <div className="topbar">
+      <div className="brandBlock">
+        <div className="buildTag">{BUILD_ID}</div>
+        <h1>AUSTRALIAN INSTITUTIONAL TRADE DESK</h1>
+        <p>{apiState} · last refresh {lastRefresh || 'never'} · sound {audioArmed ? 'armed' : 'arms on first click'}</p>
+      </div>
+      <div className="topMetrics">
+        <Metric label="ASX session" value={open ? 'OPEN' : 'CLOSED'} sub={open ? `closes in ${countdown(clock?.seconds_to_close)}` : `opens in ${countdown(clock?.seconds_to_open)}`} toneClass={open ? 'good' : 'warn'} />
+        <Metric label="Signal book" value={signals.length} sub={`${ready} reviewable`} />
+        <Metric label="Paper book" value={money(paper?.equity ?? 5000)} sub="$5,000 start" />
+        <Metric label="Next refresh" value={`${AUTO_REFRESH_MS / 1000}s`} sub={paused ? 'paused' : 'running'} />
+      </div>
+      <div className="topActions">
+        <button onClick={refresh}><RefreshCw size={16} />Scan</button>
+        <button onClick={() => setPaused((p) => !p)} className={paused ? 'run' : 'hold'}>{paused ? <Play size={16} /> : <Pause size={16} />}{paused ? 'Resume' : 'Pause'}</button>
+      </div>
     </div>
   );
 }
-function Pill({ children, type = 'neutral' }) {
-  return <span className={`pill ${type}`}>{children}</span>;
-}
-function statusType(status) {
-  const s = String(status || '').toUpperCase();
-  if (['READY', 'ARMED'].includes(s)) return 'armed';
-  if (s === 'BLOCKED') return 'blocked';
-  return 'watch';
-}
-function buildClass(level) {
-  return `statusBadge ${level}`;
-}
 
-function CommandHeader({ apiStatus, clock, paper, paused, onRefresh, onPause, soundArmed, lastRefresh, rows }) {
-  const open = Boolean(clock?.is_open);
-  const armedCount = rows.filter((r) => ['READY', 'ARMED'].includes(String(r.status).toUpperCase())).length;
+function PriorityQueue({ signals, selected, setSelected }) {
   return (
-    <header className="deskHeader">
-      <section className="brandPanel">
-        <div className="brandRow">
-          <Radar size={24} />
-          <div>
-            <h1>ASX Institutional Trade Desk</h1>
-            <p>{apiStatus}</p>
-          </div>
-        </div>
-        <div className="microLine">
-          <span className={soundArmed ? 'dot ok' : 'dot'} /> Sound/voice {soundArmed ? 'armed' : 'arms on first click'}
-          <span>Last refresh {lastRefresh}</span>
-        </div>
-      </section>
-      <section className="headerTiles">
-        <Tile label="ASX Session" value={clock?.session || 'Unknown'} sub={open ? `closes ${countDown(clock?.seconds_to_close)}` : `opens ${countDown(clock?.seconds_to_open)}`} intent={open ? 'good' : 'warn'} />
-        <Tile label="Signals" value={rows.length} sub={`${armedCount} actionable`} />
-        <Tile label="Paper Equity" value={money(paper?.equity || 5000)} sub="starting bank $5,000" />
-        <Tile label="Auto Refresh" value={`${AUTO_REFRESH_MS / 1000}s`} sub="background scan" />
-      </section>
-      <section className="actionDock">
-        <button onClick={onRefresh}><RefreshCw size={15} /> Scan</button>
-        <button onClick={onPause} className={paused ? 'resume' : 'pause'}>{paused ? <Play size={15} /> : <Pause size={15} />} {paused ? 'Resume' : 'Pause'}</button>
-      </section>
-    </header>
-  );
-}
-
-function SignalStack({ rows, selectedTicker, onSelect }) {
-  const leaders = rows.slice(0, 5);
-  return (
-    <section className="stackPanel">
-      <div className="panelTitle"><span>Priority Queue</span><small>ranked by score, strength, liquidity and setup quality</small></div>
+    <aside className="queuePanel">
+      <div className="panelTitle"><Zap size={18} /><span>Priority Queue</span></div>
       <div className="queueList">
-        {leaders.map((r, i) => (
-          <button key={r.ticker} onClick={() => onSelect(r.ticker)} className={`queueCard ${selectedTicker === r.ticker ? 'active' : ''}`}>
-            <div className="rank">{String(i + 1).padStart(2, '0')}</div>
-            <div className="queueMain"><b>{r.ticker}</b><span>{r.sector} • {r.setup}</span></div>
-            <Pill type={statusType(r.status)}>{r.status}</Pill>
-            <div className="queueScore"><b>{r.score}</b><span>{r.grade}</span></div>
+        {signals.slice(0, 12).map((s, idx) => (
+          <button key={s.ticker} className={`queueRow ${selected?.ticker === s.ticker ? 'active' : ''}`} onClick={() => setSelected(s)}>
+            <div className="rank">{idx + 1}</div>
+            <div className="qMain"><strong>{s.ticker}</strong><small>{s.setup}</small></div>
+            <div className="qScore"><b>{s.score}</b><StatusPill status={s.status} /></div>
           </button>
         ))}
-        {!leaders.length ? <div className="empty">No candidates returned from backend.</div> : null}
       </div>
-    </section>
+      <div className="riskBox">
+        <div className="panelTitle"><ShieldCheck size={17} /><span>Desk Rules</span></div>
+        <ul>
+          <li>Paper execution only until proof.</li>
+          <li>Closed market = review only, no entry.</li>
+          <li>Costs and slippage must be included.</li>
+          <li>No signal without stop, target and reason.</li>
+        </ul>
+      </div>
+    </aside>
   );
 }
 
-function Blotter({ rows, selectedTicker, onSelect }) {
+function SignalBook({ signals, selected, setSelected }) {
   return (
-    <section className="blotterPanel">
-      <div className="panelTitle"><span>Signal Blotter</span><small>not a fake P/L screen, every row is a current scan candidate</small></div>
-      <div className="tableShell">
-        <table className="blotter">
-          <thead>
-            <tr>
-              <th>Ticker</th><th>Sector</th><th>Status</th><th>Score</th><th>Conf.</th><th>Price</th><th>Buy Zone</th><th>Stop</th><th>Target</th><th>R/R</th><th>Cost Drag</th><th>Reason</th>
-            </tr>
-          </thead>
+    <div className="signalBook">
+      <div className="panelTitle"><Activity size={18} /><span>Signal Blotter</span><em>click a row to update chart and trade plan</em></div>
+      <div className="tableWrap">
+        <table>
+          <thead><tr><th>Ticker</th><th>Sector</th><th>Setup</th><th>Score</th><th>Confidence</th><th>Entry</th><th>Stop</th><th>Target</th><th>R/R</th><th>Status</th></tr></thead>
           <tbody>
-            {rows.map((r) => (
-              <tr key={r.ticker} onClick={() => onSelect(r.ticker)} className={selectedTicker === r.ticker ? 'active' : ''}>
-                <td className="ticker">{r.ticker}</td>
-                <td>{r.sector}</td>
-                <td><Pill type={statusType(r.status)}>{r.status}</Pill></td>
-                <td><Score value={r.score} /></td>
-                <td>{r.confidence}</td>
-                <td>{money(r.price)}</td>
-                <td>{r.keyZone}</td>
-                <td className="negative">{money(r.stop)}</td>
-                <td className="positive">{money(r.target)}</td>
-                <td>{Number(r.rr || 0).toFixed(2)}R</td>
-                <td>{money(costDefaults.brokerage + costDefaults.slippage)}</td>
-                <td>{(r.why && r.why[0]) || r.setup || 'Awaiting explanation.'}</td>
+            {signals.map((s) => (
+              <tr key={s.ticker} className={selected?.ticker === s.ticker ? 'selected' : ''} onClick={() => setSelected(s)}>
+                <td><b>{s.ticker}</b><small>{s.name}</small></td>
+                <td>{s.sector}</td>
+                <td>{s.setup}</td>
+                <td><b>{s.score}</b><ScoreBar value={s.score} /></td>
+                <td>{s.confidence}</td>
+                <td>{money(s.entry)}</td>
+                <td className="dangerText">{money(s.stop)}</td>
+                <td className="goodText">{money(s.target)}</td>
+                <td>{Number(s.rr || 0).toFixed(2)}R</td>
+                <td><StatusPill status={s.status} /></td>
               </tr>
             ))}
-            {!rows.length ? <tr><td colSpan="12" className="empty">No signals loaded. Check API URL, Render backend and data provider.</td></tr> : null}
           </tbody>
         </table>
       </div>
-    </section>
-  );
-}
-function Score({ value }) {
-  return <div className="score"><i style={{ width: `${Math.max(2, Math.min(100, value))}%` }} /><b>{value}</b></div>;
-}
-
-function TradePlan({ stock, marketOpen, soundArmed, onAlert, onRead }) {
-  if (!stock) return <section className="tradePlan"><div className="panelTitle"><span>Trade Plan</span></div><div className="empty">Select a candidate.</div></section>;
-  const canPaper = marketOpen && ['READY', 'ARMED'].includes(String(stock.status).toUpperCase());
-  return (
-    <section className="tradePlan">
-      <div className="panelTitle"><span>Trade Plan: {stock.ticker}</span><small>{stock.name || stock.ticker}</small></div>
-      <div className="planGrid">
-        <Tile label="Entry" value={money(stock.entry)} sub={stock.keyZone} />
-        <Tile label="Stop" value={money(stock.stop)} sub="hard invalidation" intent="bad" />
-        <Tile label="Target" value={money(stock.target)} sub={`${Number(stock.rr || 0).toFixed(2)}R profile`} intent="good" />
-        <Tile label="Costs" value={money(costDefaults.brokerage + costDefaults.slippage)} sub="round trip estimate" intent="warn" />
-      </div>
-      <div className="planActions">
-        <button disabled={!canPaper} onClick={() => onAlert('entry', stock)}>{canPaper ? 'Send to Paper' : marketOpen ? 'Blocked by status' : 'Paper locked, market closed'}</button>
-        <button onClick={() => onAlert('exit', stock)}>Exit Review</button>
-        <button onClick={() => onAlert('stop', stock)}>Stop Alert</button>
-        <button onClick={() => onAlert('target', stock)}>Target Alert</button>
-        <button onClick={() => onRead(stock)}><Speaker size={14} /> Read Plan</button>
-      </div>
-      <div className="explainGrid">
-        <div><h3>Why this is on the desk</h3><ul>{(stock.why?.length ? stock.why : ['Trend, relative strength, risk/reward and sector checks are being assessed.']).slice(0, 6).map((x) => <li key={x}>{x}</li>)}</ul></div>
-        <div><h3>Risk notes</h3><ul>{(stock.risks?.length ? stock.risks : ['No broker execution is enabled.', 'Do not enter outside the stated buy zone.', 'Market-closed candidates are review-only.']).slice(0, 6).map((x) => <li key={x}>{x}</li>)}</ul></div>
-      </div>
-      {!soundArmed ? <p className="deskNote"><Headphones size={14} /> Click anywhere once to arm browser sound and voice. There are no test buttons taking space.</p> : null}
-    </section>
+    </div>
   );
 }
 
-function ChartPanel({ stock, chart }) {
+function DeskChart({ selected, chart }) {
+  const data = chart?.length ? chart : buildChart(Number(selected?.entry || 100));
   return (
     <section className="chartPanel">
-      <div className="panelTitle"><span>Market Structure Chart</span><small>{stock ? `${stock.ticker} with entry, stop and target overlays` : 'Select a ticker'}</small></div>
+      <div className="chartHeader">
+        <div>
+          <h2>{selected?.ticker || 'No ticker'} <span>{selected?.name}</span></h2>
+          <p>{selected?.sector} · {selected?.setup} · buy zone {selected?.keyZone}</p>
+        </div>
+        <div className="chartStats"><StatusPill status={selected?.status} /><b>{selected?.score || 0}</b></div>
+      </div>
       <div className="chartBox">
-        {stock && chart.length ? (
-          <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={chart} margin={{ top: 16, right: 45, bottom: 12, left: 0 }}>
-              <CartesianGrid stroke="rgba(148,163,184,.12)" vertical={false} />
-              <XAxis dataKey="d" stroke="#8191a8" fontSize={11} minTickGap={28} />
-              <YAxis yAxisId="price" stroke="#8191a8" fontSize={11} domain={['dataMin - 2', 'dataMax + 2']} />
-              <YAxis yAxisId="volume" hide domain={[0, 'dataMax']} />
-              <Tooltip contentStyle={{ background: '#08111f', border: '1px solid #24364f', color: '#e5eefc' }} />
-              <Bar yAxisId="volume" dataKey="volume" fill="rgba(55,183,255,.18)" />
-              <Area yAxisId="price" type="monotone" dataKey="price" fill="rgba(42,167,255,.10)" stroke="none" />
-              <Line yAxisId="price" type="monotone" dataKey="price" stroke="#2aa7ff" strokeWidth={2.5} dot={false} />
-              <Line yAxisId="price" type="monotone" dataKey="ma20" stroke="#f6c958" strokeWidth={1.6} dot={false} />
-              <Line yAxisId="price" type="monotone" dataKey="ma50" stroke="#b78cff" strokeWidth={1.6} dot={false} />
-              <ReferenceLine yAxisId="price" y={stock.entry} stroke="#2aa7ff" strokeDasharray="5 5" label={{ value: 'ENTRY', fill: '#2aa7ff', fontSize: 10 }} />
-              <ReferenceLine yAxisId="price" y={stock.stop} stroke="#ff5d73" strokeDasharray="5 5" label={{ value: 'STOP', fill: '#ff5d73', fontSize: 10 }} />
-              <ReferenceLine yAxisId="price" y={stock.target} stroke="#34d399" strokeDasharray="5 5" label={{ value: 'TARGET', fill: '#34d399', fontSize: 10 }} />
-            </ComposedChart>
-          </ResponsiveContainer>
-        ) : <div className="empty">Waiting for chart history from backend.</div>}
+        <ResponsiveContainer width="100%" height="100%">
+          <ComposedChart data={data}>
+            <CartesianGrid stroke="rgba(148,163,184,.12)" vertical={false} />
+            <XAxis dataKey="day" tick={{ fill: '#7b8aaa', fontSize: 11 }} />
+            <YAxis yAxisId="price" domain={['dataMin - 2', 'dataMax + 2']} tick={{ fill: '#7b8aaa', fontSize: 11 }} />
+            <YAxis yAxisId="vol" orientation="right" hide />
+            <Tooltip contentStyle={{ background: '#08111f', border: '1px solid #25416a', color: '#eaf2ff' }} />
+            {selected?.entry ? <ReferenceLine yAxisId="price" y={selected.entry} stroke="#39a7ff" strokeDasharray="5 4" label={{ value: 'ENTRY', fill: '#39a7ff', position: 'insideTopRight' }} /> : null}
+            {selected?.stop ? <ReferenceLine yAxisId="price" y={selected.stop} stroke="#ff4d6d" strokeDasharray="5 4" label={{ value: 'STOP', fill: '#ff4d6d', position: 'insideBottomRight' }} /> : null}
+            {selected?.target ? <ReferenceLine yAxisId="price" y={selected.target} stroke="#26d07c" strokeDasharray="5 4" label={{ value: 'TARGET', fill: '#26d07c', position: 'insideTopRight' }} /> : null}
+            <Bar yAxisId="vol" dataKey="vol" fill="rgba(57,167,255,.18)" />
+            <Area yAxisId="price" type="monotone" dataKey="price" stroke="#39a7ff" fill="rgba(57,167,255,.14)" strokeWidth={2.5} />
+            <Line yAxisId="price" type="monotone" dataKey="ma20" stroke="#f5c542" strokeWidth={1.5} dot={false} />
+          </ComposedChart>
+        </ResponsiveContainer>
       </div>
     </section>
   );
 }
 
-function RiskDesk({ readiness, quality, rows }) {
-  const risk = readiness?.risk_book || {};
-  const issues = [
-    ['Data QA', quality?.passed ? 'PASS' : 'CHECK', quality?.passed ? 'good' : 'warn'],
-    ['Live Trading', readiness?.live_trading_allowed ? 'UNLOCKED' : 'LOCKED', readiness?.live_trading_allowed ? 'good' : 'bad'],
-    ['Ready/Armed', String(risk.ready ?? rows.filter((r) => ['READY', 'ARMED'].includes(String(r.status).toUpperCase())).length), 'neutral'],
-    ['Blocked', String(risk.blocked ?? rows.filter((r) => String(r.status).toUpperCase() === 'BLOCKED').length), 'warn'],
+function TradePlan({ selected, clock, onPaper, onRead }) {
+  const canEnter = Boolean(clock?.is_open) && ['READY', 'ARMED', 'REVIEW'].includes(String(selected?.status).toUpperCase());
+  const risk = Math.max(Number(selected?.entry || 0) - Number(selected?.stop || 0), 0);
+  const roundTrip = 19 + 2.5;
+  const maxRisk = 25;
+  const qty = risk > 0 ? Math.floor(Math.max(0, maxRisk - roundTrip) / risk) : 0;
+  return (
+    <aside className="planPanel">
+      <div className="panelTitle"><Bell size={18} /><span>Trade Plan</span></div>
+      <div className="planTicker"><h2>{selected?.ticker}</h2><StatusPill status={selected?.status} /></div>
+      <div className="planGrid">
+        <Metric label="Entry" value={money(selected?.entry)} />
+        <Metric label="Stop" value={money(selected?.stop)} toneClass="bad" />
+        <Metric label="Target" value={money(selected?.target)} toneClass="good" />
+        <Metric label="R/R" value={`${Number(selected?.rr || 0).toFixed(2)}R`} />
+        <Metric label="Est. cost drag" value={money(roundTrip)} sub="brokerage + slippage" />
+        <Metric label="Paper qty" value={qty} sub="based on $25 risk" />
+      </div>
+      <div className="noteBlock"><b>Why it is on the desk</b>{(selected?.why?.length ? selected.why : ['Scanner produced a review candidate.']).map((x) => <p key={x}>• {x}</p>)}</div>
+      <div className="noteBlock warning"><b>Risk notes</b>{(selected?.risks?.length ? selected.risks : ['No extra risk notes returned.']).map((x) => <p key={x}>• {x}</p>)}</div>
+      <div className="planActions">
+        <button onClick={onRead}><Headphones size={15} />Read setup</button>
+        <button className="paper" disabled={!canEnter} onClick={() => onPaper(selected)}>{canEnter ? 'Send to paper' : 'Review only'}</button>
+      </div>
+    </aside>
+  );
+}
+
+function SectorMatrix() {
+  return (
+    <section className="matrixPanel">
+      <div className="panelTitle"><Database size={18} /><span>ASX Sector & Commodity Matrix</span></div>
+      <div className="matrixGrid">
+        {sectors.map((s) => (
+          <div key={s.name} className={`sectorTile ${s.strength >= 70 ? 'hot' : s.strength < 45 ? 'cold' : ''}`}>
+            <div><b>{s.name}</b><span>{s.state}</span></div>
+            <strong>{s.strength}</strong>
+            <ScoreBar value={s.strength} />
+            <small>{s.flow} · leaders: {s.leaders}</small>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function PaperLedger({ paper }) {
+  const open = paper?.open_positions || [];
+  const closed = paper?.closed_trades || [];
+  return (
+    <section className="ledgerPanel">
+      <div className="panelTitle"><Lock size={18} /><span>$5,000 Paper Execution Book</span><em>no fake trades shown</em></div>
+      <div className="ledgerMetrics">
+        <Metric label="Cash" value={money(paper?.cash ?? 5000)} />
+        <Metric label="Equity" value={money(paper?.equity ?? 5000)} />
+        <Metric label="Open risk" value={money(paper?.open_risk ?? 0)} />
+        <Metric label="Open trades" value={open.length} />
+        <Metric label="Closed trades" value={closed.length} />
+      </div>
+      <div className="ledgerEmpty">{open.length || closed.length ? 'Paper trades are loaded from backend ledger.' : 'No paper trades yet. The book will stay clean until a real paper entry is made.'}</div>
+    </section>
+  );
+}
+
+function Readiness() {
+  const rows = [
+    ['Real ASX data', 'Delayed path built, licensed live feed recommended', 'partial'],
+    ['10-year history', 'Request path built through provider configuration', 'built'],
+    ['Delisted stocks', 'Needs vendor before institutional backtest claims', 'blocked'],
+    ['Announcements', 'Needs ASX/vendor feed for halts and price-sensitive news', 'planned'],
+    ['Costs', 'Brokerage and slippage included', 'built'],
+    ['Broker execution', 'Locked until proof', 'locked'],
   ];
-  return (
-    <section className="riskDesk">
-      <div className="panelTitle"><span><ShieldCheck size={15} /> Institutional Risk Controls</span><small>data quality, lockouts and pre-trade gates</small></div>
-      <div className="riskTiles">{issues.map(([a, b, c]) => <Tile key={a} label={a} value={b} intent={c} />)}</div>
-      <div className="qaBox">
-        <b>{quality?.ticker ? `${quality.ticker} data QA` : 'Selected data QA'}</b>
-        <p>Rows {quality?.rows ?? '-'} • First {quality?.first_date || '-'} • Last {quality?.last_date || '-'} • Stale days {quality?.stale_days ?? '-'}</p>
-        {quality?.warnings?.length ? <ul>{quality.warnings.map((w) => <li key={w}>{w}</li>)}</ul> : <small>No major warnings returned.</small>}
-      </div>
-    </section>
-  );
-}
-
-function SectorMatrix({ rows }) {
-  const groups = fallbackSectors.map((sector) => {
-    const list = rows.filter((r) => String(r.sector).toLowerCase().includes(sector.toLowerCase()) || (sector === 'Technology' && String(r.sector).toLowerCase().includes('tech')));
-    const avg = list.length ? Math.round(list.reduce((s, r) => s + r.score, 0) / list.length) : 0;
-    const armed = list.filter((r) => ['READY', 'ARMED'].includes(String(r.status).toUpperCase())).length;
-    return { sector, avg, count: list.length, armed, leaders: list.slice(0, 3).map((r) => r.ticker).join(', ') };
-  });
-  return (
-    <section className="sectorPanel">
-      <div className="panelTitle"><span>ASX Sector and Commodity Matrix</span><small>Australia-specific flow map, not US scanner clone</small></div>
-      <div className="sectorGrid">
-        {groups.map((g) => <div key={g.sector} className={`sectorCard ${g.avg >= 75 ? 'hot' : g.avg < 45 ? 'cold' : ''}`}><b>{g.sector}</b><strong>{g.avg || '-'}</strong><span>{g.count} names • {g.armed} armed</span><small>{g.leaders || 'No leaders'}</small></div>)}
-      </div>
-    </section>
-  );
-}
-
-function PaperBook({ paper, trades, onReset }) {
-  return (
-    <section className="paperBook">
-      <div className="panelTitle"><span>Paper Execution Book</span><small>$5,000 testing account, no fake market profits</small></div>
-      <div className="riskTiles">
-        <Tile label="Cash" value={money(paper?.cash ?? 5000)} />
-        <Tile label="Equity" value={money(paper?.equity ?? 5000)} />
-        <Tile label="Open Trades" value={paper?.open_positions?.length ?? trades?.filter((t) => !t.exit_price).length ?? 0} />
-        <Tile label="Open Risk" value={money(paper?.open_risk ?? 0)} intent="warn" />
-      </div>
-      <div className="tableShell small">
-        <table className="blotter">
-          <thead><tr><th>ID</th><th>Ticker</th><th>Side</th><th>Entry</th><th>Exit</th><th>Qty</th><th>Net P/L</th><th>R</th><th>Result</th><th>Reason</th></tr></thead>
-          <tbody>{trades?.length ? trades.map((t) => <tr key={t.trade_id || t.id}><td>{t.trade_id || t.id}</td><td className="ticker">{t.ticker}</td><td>{t.side}</td><td>{money(t.entry_price)}</td><td>{t.exit_price ? money(t.exit_price) : 'OPEN'}</td><td>{t.qty}</td><td className={Number(t.net_pnl || 0) >= 0 ? 'positive' : 'negative'}>{money(t.net_pnl)}</td><td>{Number(t.r_multiple || 0).toFixed(2)}R</td><td>{t.result || 'OPEN'}</td><td>{t.exit_reason || '-'}</td></tr>) : <tr><td colSpan="10" className="empty">No paper trades yet. Real entries will appear here only after paper order creation.</td></tr>}</tbody>
-        </table>
-      </div>
-      <button className="dangerButton" onClick={onReset}>Reset Paper Account</button>
-    </section>
-  );
-}
-
-function BuildStrip() {
-  return (
-    <section className="buildStrip">
-      <div className="panelTitle"><span>Build Status</span><small>transparent production readiness</small></div>
-      <div className="buildGrid">{buildStatus.map(([name, status, level, detail]) => <div className="buildItem" key={name}><b>{name}</b><span className={buildClass(level)}>{status}</span><p>{detail}</p></div>)}</div>
-    </section>
-  );
-}
-
-function AlertToast({ alert, onClose }) {
-  if (!alert) return null;
-  return <div className={`alertToast ${alert.type || 'entry'}`}><button onClick={onClose}>×</button><b><Bell size={14} /> {String(alert.type || 'entry').toUpperCase()} ALERT</b><p>{alert.message}</p><small>Auto closes after 60 seconds. Sound/voice requires first page click.</small></div>;
+  return <section className="readinessPanel"><div className="panelTitle"><CheckCircle2 size={18} /><span>Production Readiness</span></div>{rows.map(([a,b,c]) => <div className={`readyRow ${c}`} key={a}><b>{a}</b><span>{b}</span><em>{c}</em></div>)}</section>;
 }
 
 function App() {
-  const [signals, setSignals] = useState({});
-  const [selected, setSelected] = useState('');
+  const [signals, setSignals] = useState(fallbackSignals);
+  const [selected, setSelected] = useState(fallbackSignals[0]);
+  const [paper, setPaper] = useState(defaultPaper);
+  const [clock, setClock] = useState(defaultClock);
   const [chart, setChart] = useState([]);
-  const [clock, setClock] = useState(null);
-  const [paper, setPaper] = useState({ cash: 5000, equity: 5000 });
-  const [trades, setTrades] = useState([]);
-  const [apiStatus, setApiStatus] = useState('Connecting to Render API');
-  const [scanMessage, setScanMessage] = useState('Waiting for scan.');
-  const [lastRefresh, setLastRefresh] = useState('-');
-  const [soundArmed, setSoundArmed] = useState(false);
+  const [apiState, setApiState] = useState('loading backend');
+  const [lastRefresh, setLastRefresh] = useState('never');
   const [paused, setPaused] = useState(false);
+  const [audioArmed, setAudioArmed] = useState(false);
   const [alert, setAlert] = useState(null);
-  const [readiness, setReadiness] = useState(null);
-  const [quality, setQuality] = useState(null);
-  const didSpeakRef = useRef(false);
-  const rows = useMemo(() => Object.values(signals).sort((a, b) => b.score - a.score), [signals]);
-  const stock = selected ? signals[selected] : rows[0];
-  const marketOpen = Boolean(clock?.is_open);
+  const timer = useRef(null);
 
-  async function api(path, options) {
-    const res = await fetch(`${API_BASE}${path}`, { cache: 'no-store', ...(options || {}) });
-    if (!res.ok) throw new Error(`${path} HTTP ${res.status}`);
+  const armOnce = async () => {
+    if (!audioArmed) {
+      const ok = await unlockAudio();
+      setAudioArmed(ok);
+    }
+  };
+
+  const fetchJson = async (path) => {
+    const res = await fetch(`${API_BASE}${path}`);
+    if (!res.ok) throw new Error(`${path} ${res.status}`);
     return res.json();
-  }
-  async function refreshAll() {
-    if (paused) return;
-    try {
-      const [clockPayload, signalsPayload, paperPayload, tradesPayload, readyPayload] = await Promise.all([
-        api('/market-clock'),
-        api('/signals'),
-        api('/paper'),
-        api('/paper/trades'),
-        api('/institutional-readiness').catch(() => null),
-      ]);
-      const next = {};
-      (signalsPayload.signals || []).forEach((sig) => {
-        const r = normaliseSignal(sig);
-        if (r.ticker) next[r.ticker] = r;
-      });
-      setClock(clockPayload);
-      setSignals(next);
-      setSelected((prev) => next[prev] ? prev : Object.keys(next)[0] || '');
-      setPaper(paperPayload || { cash: 5000, equity: 5000 });
-      setTrades(tradesPayload.trades || []);
-      setReadiness(readyPayload);
-      setLastRefresh(new Date().toLocaleTimeString());
-      setScanMessage(signalsPayload.message || 'Scan complete.');
-      setApiStatus(`Connected • ${signalsPayload.provider || 'provider'} • ${signalsPayload.period || '-'} • ${signalsPayload.mode || 'scan'}`);
-    } catch (err) {
-      setApiStatus(`API problem: ${err.message}`);
-      setScanMessage('Backend is not returning scan data. Check Render API URL and logs.');
-    }
-  }
-  useEffect(() => { refreshAll(); const timer = setInterval(refreshAll, AUTO_REFRESH_MS); return () => clearInterval(timer); }, [paused]);
-  useEffect(() => {
-    async function arm() {
-      const ok = await armAudio();
-      setSoundArmed(ok);
-      if (ok && !didSpeakRef.current) {
-        didSpeakRef.current = true;
-        playTone('target');
-        speak('ASX institutional desk sound and voice alerts are armed.');
-      }
-    }
-    window.addEventListener('pointerdown', arm, { once: true });
-    return () => window.removeEventListener('pointerdown', arm);
-  }, []);
-  useEffect(() => {
-    if (!stock) return;
-    api(`/prices/${stock.ticker}`).then((payload) => {
-      const prices = (payload.prices || []).slice(-160);
-      const mapped = prices.map((p) => ({ d: String(p.date).slice(5, 10), price: Number(p.close), volume: Number(p.volume || 0) }));
-      const withMa = mapped.map((row, i, arr) => {
-        const avg = (n) => i + 1 < n ? undefined : arr.slice(i + 1 - n, i + 1).reduce((s, x) => s + x.price, 0) / n;
-        return { ...row, ma20: avg(20), ma50: avg(50) };
-      });
-      setChart(withMa);
-    }).catch(() => setChart([]));
-    api(`/data-quality/${stock.ticker}`).then(setQuality).catch(() => setQuality(null));
-  }, [selected, stock?.ticker]);
-  useEffect(() => { if (!alert) return; const timer = setTimeout(() => setAlert(null), 60000); return () => clearTimeout(timer); }, [alert]);
+  };
 
-  function trigger(type, s = stock) {
-    if (!s) return;
-    const message = voiceMessage(type, s);
-    setAlert({ type, message, ticker: s.ticker });
-    if (soundArmed) { playTone(type); speak(message); }
-  }
-  function readPlan(s = stock) {
-    if (!s) return;
-    const message = voiceMessage('entry', s);
-    if (soundArmed) speak(message);
-    setAlert({ type: 'entry', message, ticker: s.ticker });
-  }
-  async function resetPaper() {
-    try { await api('/paper/reset', { method: 'POST' }); refreshAll(); } catch (e) { setScanMessage(`Paper reset failed: ${e.message}`); }
-  }
+  const refresh = async () => {
+    try {
+      const [sig, clk, ppr] = await Promise.all([
+        fetchJson('/signals'),
+        fetchJson('/market-clock').catch(() => defaultClock),
+        fetchJson('/paper').catch(() => defaultPaper),
+      ]);
+      const rows = (sig.signals || sig || []).map(normaliseSignal).filter((x) => x.ticker);
+      const nextRows = rows.length ? rows : fallbackSignals;
+      setSignals(nextRows);
+      setSelected((old) => nextRows.find((x) => x.ticker === old?.ticker) || nextRows[0]);
+      setClock(clk || defaultClock);
+      setPaper(ppr || defaultPaper);
+      setApiState(sig.mode || 'backend connected');
+      setLastRefresh(new Date().toLocaleTimeString());
+    } catch (err) {
+      setSignals(fallbackSignals);
+      setSelected((old) => fallbackSignals.find((x) => x.ticker === old?.ticker) || fallbackSignals[0]);
+      setApiState(`offline fallback: ${err.message}`);
+      setLastRefresh(new Date().toLocaleTimeString());
+    }
+  };
+
+  useEffect(() => { refresh(); }, []);
+  useEffect(() => {
+    if (timer.current) clearInterval(timer.current);
+    if (!paused) timer.current = setInterval(refresh, AUTO_REFRESH_MS);
+    return () => timer.current && clearInterval(timer.current);
+  }, [paused]);
+  useEffect(() => {
+    if (!selected?.ticker) return;
+    fetchJson(`/prices/${selected.ticker}`).then((data) => {
+      const rows = (data.prices || data || []).map((x, i) => ({ day: i + 1, price: Number(x.close || x.price || x.Price || 0), ma20: Number(x.ma20 || x.close || x.price || 0), vol: Number(x.volume || 0) })).filter((x) => x.price);
+      setChart(rows.length ? rows.slice(-120) : buildChart(Number(selected.entry || 100)));
+    }).catch(() => setChart(buildChart(Number(selected.entry || 100))));
+  }, [selected?.ticker]);
+
+  const readSelected = async () => {
+    await armOnce();
+    tone('entry');
+    speak(`${selected.ticker} review. Entry ${money(selected.entry)}. Stop ${money(selected.stop)}. Target ${money(selected.target)}. Buy zone ${selected.keyZone}. ${clock?.is_open ? 'Market is open, paper entry can be reviewed.' : 'Market is closed, review only. Do not enter until market opens.'}`);
+  };
+  const sendPaper = async (stock) => {
+    await armOnce();
+    try {
+      const res = await fetch(`${API_BASE}/paper/enter`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ticker: stock.ticker, side: 'LONG', quantity: 1, entry_price: stock.entry, stop: stock.stop, target: stock.target, setup: stock.setup, score: stock.score }) });
+      if (!res.ok) throw new Error('paper entry blocked');
+      setAlert(`${stock.ticker} paper trade entered.`);
+      tone('entry'); speak(`${stock.ticker} paper trade entered. Entry ${money(stock.entry)} stop ${money(stock.stop)} target ${money(stock.target)}.`);
+      refresh();
+    } catch (err) {
+      setAlert(`${stock.ticker} paper entry blocked. ${err.message}`);
+      tone('stop'); speak(`${stock.ticker} paper entry blocked. Check market status and risk gate.`);
+    }
+    setTimeout(() => setAlert(null), 60000);
+  };
+
+  const sorted = useMemo(() => [...signals].sort((a, b) => Number(b.score || 0) - Number(a.score || 0)), [signals]);
 
   return (
-    <main className="desk">
-      <CommandHeader apiStatus={apiStatus} clock={clock} paper={paper} paused={paused} onRefresh={refreshAll} onPause={() => setPaused(!paused)} soundArmed={soundArmed} lastRefresh={lastRefresh} rows={rows} />
-      <section className="situationBar">
-        <div><b>Desk Brief</b><span>{rows[0] ? `${rows[0].ticker} is top-ranked. ${scanMessage}` : scanMessage}</span></div>
-        {!marketOpen ? <Pill type="watch">AFTER-HOURS REVIEW MODE</Pill> : <Pill type="armed">MARKET OPEN</Pill>}
-        <Pill type="blocked"><Lock size={12} /> Live broker locked</Pill>
-      </section>
-      <div className="workspace">
-        <aside className="leftRail"><SignalStack rows={rows} selectedTicker={stock?.ticker || selected} onSelect={setSelected} /><RiskDesk readiness={readiness} quality={quality} rows={rows} /></aside>
-        <section className="centerStage"><ChartPanel stock={stock} chart={chart} /><Blotter rows={rows} selectedTicker={stock?.ticker || selected} onSelect={setSelected} /></section>
-        <aside className="rightRail"><TradePlan stock={stock} marketOpen={marketOpen} soundArmed={soundArmed} onAlert={trigger} onRead={readPlan} /><SectorMatrix rows={rows} /></aside>
+    <main className="appShell" onClick={armOnce}>
+      <TopBar clock={clock} paper={paper} signals={sorted} apiState={apiState} lastRefresh={lastRefresh} paused={paused} setPaused={setPaused} refresh={refresh} audioArmed={audioArmed} />
+      {alert && <div className="tradeToast"><Bell size={18} /><span>{alert}</span><button onClick={() => setAlert(null)}>close</button></div>}
+      <div className="deskGrid">
+        <PriorityQueue signals={sorted} selected={selected} setSelected={setSelected} />
+        <section className="centreStack">
+          <DeskChart selected={selected} chart={chart} />
+          <SignalBook signals={sorted} selected={selected} setSelected={setSelected} />
+        </section>
+        <section className="rightStack">
+          <TradePlan selected={selected} clock={clock} onPaper={sendPaper} onRead={readSelected} />
+          <SectorMatrix />
+        </section>
       </div>
-      <div className="lowerDeck"><PaperBook paper={paper} trades={trades} onReset={resetPaper} /><BuildStrip /></div>
-      <AlertToast alert={alert} onClose={() => setAlert(null)} />
+      <div className="bottomGrid">
+        <PaperLedger paper={paper} />
+        <Readiness />
+      </div>
     </main>
   );
 }

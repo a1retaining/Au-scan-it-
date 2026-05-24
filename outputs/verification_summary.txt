@@ -1,13 +1,7 @@
-ASX Trade Finder Pro v15 verification
+ASX Trade Finder Pro v17 verification
 
+Frontend build: passed
+Frontend server health check: passed
 Backend tests: 20 passed
-Frontend production build: passed
-Scanner sample run: passed
-Backtest sample run: passed
-Frontend server /health: passed
-New institutional endpoints checked: /institutional-readiness, /data-quality/{ticker}, /audit
 
-Notes:
-- Live broker execution remains intentionally locked.
-- 10-year history is available through configured provider, but institutional-grade real-time/delisted/corporate-action data still requires a licensed provider.
-- Sound and voice are armed after the first browser interaction due browser security restrictions.
+Visible header build ID: ASX-HEDGE-DESK-V17

@@ -1,5 +1,12 @@
 # Traders Success Formula: ASX
 
+## Current deploy build
+
+Expected frontend health build id: `AU-ASX-INSTITUTIONAL-DESK-V19`.
+
+Check after deploy: `https://YOUR-FRONTEND.onrender.com/health`.
+
+
 A GitHub-ready Australian trading system project with:
 
 - ASX signal scanner
@@ -299,3 +306,7 @@ POST /risk/pretrade
 ```
 
 See `docs/HEDGE_FUND_GRADE_UPGRADE.md`.
+
+
+## V18 visual verification
+After deployment, the frontend must show `AU-ASX-INSTITUTIONAL-DESK-V18` in the top-left build tag. The `/health` endpoint must return `build_id: AU-ASX-INSTITUTIONAL-DESK-V18`. If it does not, Render is serving an old build, wrong branch, or wrong service.
