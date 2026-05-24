@@ -252,3 +252,14 @@ The root `npm start` command now installs frontend dependencies if needed and st
 The app now includes a backend `/keepalive` endpoint, a GitHub Actions keepalive workflow, and frontend signal polling. See `docs/KEEPALIVE_AND_AUTO_REFRESH.md`.
 
 Render free services can still spin down or run out of free monthly hours. For true never-sleep hosting, use a paid Render instance.
+
+## Render deployment fix
+
+For Render Web Service frontend deployments, use:
+
+```bash
+npm run build
+npm start
+```
+
+The root `npm start` runs `server.mjs`, which binds to Render's `$PORT`. Do not use `vite preview` directly as the Render start command.

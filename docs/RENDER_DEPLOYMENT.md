@@ -1,58 +1,60 @@
-# Render Deployment
+# Render deployment
 
-## Recommended setup
+## Recommended deployment
 
-Create two Render services:
+Deploy two Render services from the same GitHub repo:
 
-1. **Backend API** as a Python Web Service
-2. **Frontend** as a Static Site
+1. **Backend API** as a Python Web Service.
+2. **Frontend** as a Node Web Service.
 
-## Backend API service
+The frontend uses `server.mjs`, a small Node static server. This is more reliable on Render Web Services than `vite preview` because it binds directly to Render's `$PORT`.
 
-Use these settings:
+## Frontend settings
+
+Use these settings if creating the frontend manually:
 
 ```text
+Runtime: Node
 Root Directory: leave blank
+Build Command: npm run build
+Start Command: npm start
+Health Check Path: /health
+```
+
+Do **not** use `vite preview` directly as the Render start command. Use `npm start`.
+
+## Backend settings
+
+```text
+Runtime: Python
 Build Command: pip install -r requirements.txt && pip install -e .
 Start Command: uvicorn asx_trade_finder.api:app --host 0.0.0.0 --port $PORT
 Health Check Path: /health
 ```
 
-## Frontend static site
+## Frontend environment variables
 
-Use these settings:
-
-```text
-Root Directory: frontend
-Build Command: npm ci && npm run build
-Publish Directory: dist
-```
-
-Add this environment variable after your backend URL is known:
+Set:
 
 ```text
-VITE_API_BASE_URL=https://YOUR-BACKEND-SERVICE.onrender.com
+VITE_API_BASE_URL=https://your-api-service.onrender.com
+VITE_AUTO_REFRESH_MS=60000
 ```
 
-## If you deploy the frontend as a Web Service by mistake
+## Free instance warning
 
-The root `package.json` now supports this too.
+Render Free services can spin down. Keepalive pings help, but the only proper never-sleep setup is a paid instance.
 
-Use:
+## Common errors fixed
 
-```text
-Build Command: npm run build
-Start Command: npm start
-```
+### `vite: not found`
 
-The start script installs frontend dependencies if missing, builds `dist` if missing, and then runs Vite preview on Render's `$PORT`.
+Cause: Render started the app without frontend dependencies installed.
 
-## Previous error fixed
+Fix: Use root `npm run build` and root `npm start`. The root build installs frontend dependencies using `npm --prefix frontend ci`.
 
-If Render shows this:
+### `No open ports detected`
 
-```text
-sh: 1: vite: not found
-```
+Cause: the start command did not bind a server to `$PORT`.
 
-It means the frontend dependencies were not installed before `npm start`. This repo now fixes that by making the root `start` command run `npm ci` inside `frontend` when `node_modules` is missing.
+Fix: root `npm start` runs `node server.mjs`, which listens on `0.0.0.0:$PORT` and serves `frontend/dist`.

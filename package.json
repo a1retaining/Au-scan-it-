@@ -1,16 +1,16 @@
 {
   "name": "asx-trade-finder",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "description": "ASX Trade Finder monorepo root. Frontend lives in ./frontend and backend lives in ./src.",
   "scripts": {
     "dev": "cd frontend && npm ci && npm run dev",
-    "build": "cd frontend && npm ci && npm run build",
-    "start": "cd frontend && if [ ! -d node_modules ]; then npm ci; fi && if [ ! -d dist ]; then npm run build; fi && npm run preview -- --host 0.0.0.0 --port ${PORT:-10000}",
+    "build": "npm --prefix frontend ci && npm --prefix frontend run build",
+    "start": "node server.mjs",
     "frontend:install": "cd frontend && npm ci",
     "frontend:build": "cd frontend && npm run build",
     "frontend:dev": "cd frontend && npm run dev",
-    "frontend:preview": "cd frontend && npm run preview -- --host 0.0.0.0 --port ${PORT:-10000}",
+    "frontend:preview": "node server.mjs",
     "test": "python -m pytest",
     "api": "uvicorn asx_trade_finder.api:app --host 0.0.0.0 --port ${PORT:-8000}"
   },
