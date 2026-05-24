@@ -27,3 +27,9 @@ button:hover{background:#261b35}button:disabled{opacity:.45;cursor:not-allowed}
 
 .candleBox { padding: 0; overflow: hidden; }
 .candleSvg { width: 100%; height: 100%; display: block; }
+
+.queueRow.expanded{grid-template-columns:34px minmax(0,1fr) auto;align-items:start}
+.qMeta{display:grid;grid-template-columns:1fr;gap:2px;margin-top:5px;font-size:11px;color:#c9d6ef;text-transform:none;letter-spacing:0;font-weight:800}
+.qMeta span:first-child{color:#f8fbff}.qMeta span:last-child{color:#ffe38a}
+.chartLegend{display:flex;flex-wrap:wrap;gap:8px 14px;margin-top:10px;padding:9px 10px;border:1px solid rgba(148,163,184,.18);border-radius:12px;background:#090d16;color:#b8c2d4;font-size:12px;font-weight:800}
+.chartLegend span{display:inline-flex;align-items:center;gap:6px}.chartLegend i{width:18px;height:4px;border-radius:999px;display:inline-block}.legendCandle{height:11px!important;width:11px!important;border-radius:2px!important;background:linear-gradient(90deg,#23f0a0 50%,#ff4d6d 50%)}.legendMa{background:#f5c542}.legendEntry{background:#39a7ff}.legendStop{background:#ff4d6d}.legendTarget{background:#26d07c}

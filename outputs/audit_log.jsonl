@@ -26,3 +26,6 @@
 {"event_type": "SCAN_COMPLETED", "payload": {"count": 45, "mode": "closed_market_review", "ok": true, "period": "10y", "provider": "csv"}, "time_utc": "2026-05-24T21:36:46.539005+00:00"}
 {"event_type": "KEEPALIVE", "payload": {"last_scan": "2026-05-24T21:36:46.538864+00:00"}, "time_utc": "2026-05-24T21:36:46.553714+00:00"}
 {"event_type": "SCAN_COMPLETED", "payload": {"count": 45, "mode": "closed_market_review", "ok": true, "period": "10y", "provider": "csv"}, "time_utc": "2026-05-24T21:36:46.655551+00:00"}
+{"event_type": "SCAN_COMPLETED", "payload": {"count": 45, "mode": "closed_market_review", "ok": true, "period": "10y", "provider": "csv"}, "time_utc": "2026-05-24T22:30:59.886121+00:00"}
+{"event_type": "KEEPALIVE", "payload": {"last_scan": "2026-05-24T22:30:59.885983+00:00"}, "time_utc": "2026-05-24T22:30:59.896103+00:00"}
+{"event_type": "SCAN_COMPLETED", "payload": {"count": 45, "mode": "closed_market_review", "ok": true, "period": "10y", "provider": "csv"}, "time_utc": "2026-05-24T22:30:59.957230+00:00"}

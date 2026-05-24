@@ -322,3 +322,13 @@ ASX_AUTO_PAPER_ENABLED=true
 ASX_AUTO_PAPER_MAX_ENTRIES_PER_SCAN=2
 ASX_SCAN_INTERVAL_SECONDS=60
 ```
+
+## V23 chart and shared updates
+
+V23 adds a clearer chart legend, price/entry-area details in the priority queue, and documentation explaining what is shared through the hosted backend versus what stays local in each browser.
+
+Deploy check:
+
+```text
+/health should return AU-ASX-INSTITUTIONAL-DESK-V23
+```

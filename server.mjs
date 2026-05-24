@@ -89,7 +89,7 @@ const server = createServer(async (req, res) => {
   try {
     if (req.url === '/health' || req.url === '/keepalive' || req.url === '/version') {
       res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ ok: true, service: 'asx-trade-finder-frontend', build_id: 'AU-ASX-INSTITUTIONAL-DESK-V22', time: new Date().toISOString(), api_proxy_target: Boolean(apiProxyTarget) }));
+      res.end(JSON.stringify({ ok: true, service: 'asx-trade-finder-frontend', build_id: 'AU-ASX-INSTITUTIONAL-DESK-V23', time: new Date().toISOString(), api_proxy_target: Boolean(apiProxyTarget) }));
       return;
     }
 

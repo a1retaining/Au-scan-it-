@@ -37,7 +37,7 @@ import './styles.css';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (typeof window !== 'undefined' ? window.location.origin : '');
 const AUTO_REFRESH_MS = Number(import.meta.env.VITE_AUTO_REFRESH_MS || 60000);
-const BUILD_ID = 'AU-ASX-INSTITUTIONAL-DESK-V22';
+const BUILD_ID = 'AU-ASX-INSTITUTIONAL-DESK-V23';
 
 const fallbackSignals = [
   { ticker: 'CBA', name: 'Commonwealth Bank', sector: 'Banks', score: 88, confidence: 82, status: 'REVIEW', setup: 'Pullback to value', price: 123.4, entry: 123.2, stop: 119.8, target: 132.7, rr: 2.79, volume: 1.3, change: 0.8, keyZone: '$122.40 to $124.10', why: ['Trend structure still positive', 'Banks sector holding up better than market', 'Price is near a defined buy zone'], risks: ['Market is closed, no entry now', 'Needs fresh liquidity check at open'] },
@@ -227,15 +227,27 @@ function TopBar({ clock, paper, signals, apiState, lastRefresh, paused, setPause
 function PriorityQueue({ signals, selected, onSelect }) {
   return (
     <aside className="queuePanel">
-      <div className="panelTitle"><Zap size={18} /><span>Priority Queue</span></div>
+      <div className="panelTitle"><Zap size={18} /><span>Priority Queue</span><em>price + entry area</em></div>
       <div className="queueList">
-        {signals.slice(0, 12).map((s, idx) => (
-          <button key={s.ticker} className={`queueRow ${selected?.ticker === s.ticker ? 'active' : ''}`} onClick={() => onSelect(s)}>
+        {signals.slice(0, 18).map((s, idx) => (
+          <button key={s.ticker} className={`queueRow expanded ${selected?.ticker === s.ticker ? 'active' : ''}`} onClick={() => onSelect(s)}>
             <div className="rank">{idx + 1}</div>
-            <div className="qMain"><strong>{s.ticker}</strong><small>{s.setup}</small></div>
+            <div className="qMain">
+              <strong>{s.ticker}</strong>
+              <small>{s.setup}</small>
+              <div className="qMeta"><span>Last {money(s.price || s.entry)}</span><span>Entry {s.keyZone || money(s.entry)}</span></div>
+            </div>
             <div className="qScore"><b>{s.score}</b><StatusPill status={s.status} /></div>
           </button>
         ))}
+      </div>
+      <div className="riskBox">
+        <div className="panelTitle"><Database size={17} /><span>Shared Scanner State</span></div>
+        <ul>
+          <li>Backend-connected scans are shared to everyone viewing the site.</li>
+          <li>Selected ticker, sound state and chart view are local to each browser.</li>
+          <li>Frontend fallback mode is safe review data only until the backend is connected.</li>
+        </ul>
       </div>
       <div className="riskBox">
         <div className="panelTitle"><ShieldCheck size={17} /><span>Desk Rules</span></div>
@@ -331,7 +343,8 @@ function CandleChart({ data, selected }) {
         <line x1={pad.left} x2={width - pad.right} y1={y(Number(value))} y2={y(Number(value))} stroke={color} strokeDasharray="7 5" strokeWidth="1.5" />
         <text x={width - pad.right - 74} y={y(Number(value)) - 7} fill={color} fontSize="14" fontWeight="800">{label}</text>
       </g>)}
-      <text x={pad.left} y={height - 18} fill="#7b8aaa" fontSize="12">Candles: open, high, low, close • blue/yellow line: 20-period average • bars: volume</text>
+      <text x={pad.left} y={height - 32} fill="#7b8aaa" fontSize="12">Legend: green/red candles = price movement • yellow line = 20-period average • lower bars = volume</text>
+      <text x={pad.left} y={height - 16} fill="#7b8aaa" fontSize="12">Dashed blue = planned entry • dashed red = stop / invalidation • dashed green = first target</text>
     </svg>
   );
 }
@@ -346,6 +359,13 @@ function DeskChart({ selected, chart }) {
           <p>{selected?.sector} · {selected?.setup} · buy zone {selected?.keyZone}</p>
         </div>
         <div className="chartStats"><StatusPill status={selected?.status} /><b>{selected?.score || 0}</b></div>
+      </div>
+      <div className="chartLegend">
+        <span><i className="legendCandle" />Candles show open, high, low and close</span>
+        <span><i className="legendMa" />Yellow line is the 20-period average</span>
+        <span><i className="legendEntry" />Blue line is entry</span>
+        <span><i className="legendStop" />Red line is stop</span>
+        <span><i className="legendTarget" />Green line is target</span>
       </div>
       <div className="chartBox candleBox"><CandleChart data={data} selected={selected} /></div>
     </section>
