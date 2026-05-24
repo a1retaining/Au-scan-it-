@@ -284,3 +284,18 @@ VITE_DEMO_MODE=false
 The dashboard will not show fake trades or fake profit. It will show no paper trades until trades are actually entered into the paper account.
 
 See `docs/REAL_DATA_AND_MARKET_CLOCK.md`.
+
+## v15 Hedge Fund Grade Upgrade
+
+This version adds an Institutional Risk Desk layer. It includes audit logging, data-quality checks, a pre-trade risk endpoint, and an institutional readiness endpoint. Live broker execution remains locked by design.
+
+New endpoints:
+
+```text
+GET  /institutional-readiness
+GET  /data-quality/{ticker}
+GET  /audit
+POST /risk/pretrade
+```
+
+See `docs/HEDGE_FUND_GRADE_UPGRADE.md`.

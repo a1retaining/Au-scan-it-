@@ -1,0 +1,7 @@
+{"event_type": "SCAN_COMPLETED", "payload": {"count": 45, "mode": "closed_market_review", "ok": true, "period": "10y", "provider": "csv"}, "time_utc": "2026-05-24T20:15:01.646092+00:00"}
+{"event_type": "KEEPALIVE", "payload": {"last_scan": "2026-05-24T20:15:01.645921+00:00"}, "time_utc": "2026-05-24T20:15:01.662142+00:00"}
+{"event_type": "SCAN_COMPLETED", "payload": {"count": 45, "mode": "closed_market_review", "ok": true, "period": "10y", "provider": "csv"}, "time_utc": "2026-05-24T20:15:01.763565+00:00"}
+{"event_type": "SCAN_COMPLETED", "payload": {"count": 45, "mode": "closed_market_review", "ok": true, "period": "10y", "provider": "csv"}, "time_utc": "2026-05-24T20:16:18.418222+00:00"}
+{"event_type": "SCAN_COMPLETED", "payload": {"count": 45, "mode": "closed_market_review", "ok": true, "period": "10y", "provider": "csv"}, "time_utc": "2026-05-24T20:16:44.638476+00:00"}
+{"event_type": "KEEPALIVE", "payload": {"last_scan": "2026-05-24T20:16:44.638188+00:00"}, "time_utc": "2026-05-24T20:16:44.656388+00:00"}
+{"event_type": "SCAN_COMPLETED", "payload": {"count": 45, "mode": "closed_market_review", "ok": true, "period": "10y", "provider": "csv"}, "time_utc": "2026-05-24T20:16:44.764112+00:00"}

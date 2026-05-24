@@ -1,8 +1,13 @@
-ASX Trade Finder Pro v12 verification
+ASX Trade Finder Pro v15 verification
 
-Backend tests: 16 passed
+Backend tests: 20 passed
 Frontend production build: passed
-Frontend static server /health: passed
 Scanner sample run: passed
 Backtest sample run: passed
-Added: yfinance delayed ASX provider, 10-year period support, market clock, no fake paper trades, no fake profit, chart price endpoint, voice/sound unlock controls.
+Frontend server /health: passed
+New institutional endpoints checked: /institutional-readiness, /data-quality/{ticker}, /audit
+
+Notes:
+- Live broker execution remains intentionally locked.
+- 10-year history is available through configured provider, but institutional-grade real-time/delisted/corporate-action data still requires a licensed provider.
+- Sound and voice are armed after the first browser interaction due browser security restrictions.

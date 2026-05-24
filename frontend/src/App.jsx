@@ -1,92 +1,67 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
-  Area, AreaChart, Bar, BarChart, CartesianGrid, Line, LineChart,
-  ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis
+  CartesianGrid, ComposedChart, Line, Bar, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis
 } from 'recharts';
-import {
-  Activity, AlertTriangle, BarChart3, Bell, BookOpen, CheckCircle,
-  CheckCircle2, Clock3, Flame, Gauge, Grid3X3, Layers, Lock,
-  Megaphone, MousePointerClick, Radio, RadioTower, Search, ShieldCheck,
-  StopCircle, Target, TrendingUp, Volume2, VolumeX, WalletCards
-} from 'lucide-react';
+import { Bell, CheckCircle, Clock3, Flame, Lock, Pause, Play, Search, Volume2, ShieldCheck, Database, Activity } from 'lucide-react';
 import './styles.css';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || (typeof window !== 'undefined' ? window.location.origin : '');
 const AUTO_REFRESH_MS = Number(import.meta.env.VITE_AUTO_REFRESH_MS || 60000);
-const DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true';
-
-const demoStocks = {
-  CBA: {
-    ticker: 'CBA', name: 'Commonwealth Bank', sector: 'Banks', price: 123.4, change: 1.8,
-    score: 91, confidence: 88, grade: 'A+', status: 'READY', setup: 'Clean pullback', rr: 2.8, volume: 1.7,
-    entry: 123.2, stop: 119.8, target: 132.7, risk: '0.50%', why: ['Demo only'], risks: ['Connect API for real data'], chart: []
-  }
-};
 
 const buildStatus = [
-  ['Free delayed ASX data path','BUILT','built','Backend can use Yahoo Finance/yfinance for delayed ASX prices using .AX symbols. Set ASX_DATA_PROVIDER=yfinance.'],
-  ['10+ years historical data','BUILT VIA PROVIDER','built','Scanner and backtest can request period=10y from the yfinance provider. For institutional quality, import licensed historical data.'],
-  ['Delisted stock database','NEEDS DATA','blocked','Still needs a paid/curated delisted universe to remove survivorship bias. Do not fake this.'],
-  ['ASX announcements feed','PLANNED','planned','Structure is ready, but a real announcements provider or ASX integration must be connected.'],
-  ['Earnings and dividend calendar','PLANNED','planned','Needed for gap-risk warnings and ex-dividend handling.'],
-  ['Brokerage and slippage engine','BUILT','built','Paper and backtest cost modelling includes buy/sell brokerage and slippage.'],
-  ['Liquidity and spread model','PART BUILT','partial','Average daily value is built. True live bid/ask spread still needs a live data feed.'],
-  ['Walk-forward testing','PART BUILT','partial','Backtest structure exists. Full rolling windows and reports need expansion.'],
-  ['Paper-trading journal','BUILT','built','Tracks trade ID, ticker, entry, exit, quantity, P/L, R multiple, result and reason.'],
-  ['Sound alerts and voice readouts','BUILT','built','Requires the user to click Enable sound & voice because browsers block autoplay audio.'],
-  ['User settings and saved watchlists','PART BUILT','partial','Config exists. Persistent frontend watchlists/settings still need storage.'],
-  ['Broker connection only after proof','LOCKED','locked','Correctly locked until backtest, walk-forward and paper trading pass.'],
-  ['Chart click-through for every ticker','BUILT','built','Clicking a ticker fetches price history from the backend /prices endpoint.'],
-  ['Plain-English signal explanation engine','BUILT','built','Explains pass/fail reasons and trade risk.'],
-  ['Market open/close clock','BUILT','built','Backend exposes Australia/Sydney ASX session state and countdowns.'],
+  ['Free delayed ASX data path','BUILT','built','Yahoo/yfinance .AX provider can be used for delayed ASX prices.'],
+  ['10+ years historical data','BUILT VIA PROVIDER','built','Scanner/backtest can request period=10y. Proper licensed history is still better.'],
+  ['Delisted stock database','NEEDS DATA','blocked','Needed to remove survivorship bias. This cannot be faked.'],
+  ['ASX announcements feed','PLANNED','planned','Needed for halts, capital raises and price-sensitive announcements.'],
+  ['Earnings and dividend calendar','PLANNED','planned','Needed for gap-risk and ex-dividend warnings.'],
+  ['Brokerage and slippage engine','BUILT','built','Paper/backtest cost model includes entry/exit brokerage and slippage.'],
+  ['Liquidity and spread model','PART BUILT','partial','Average value is built. True live bid/ask needs market data.'],
+  ['Walk-forward testing','PART BUILT','partial','Base backtest exists. Rolling windows need full reporting.'],
+  ['Paper-trading journal','BUILT','built','Tracks entries, exits, P/L, R multiple, result and reason.'],
+  ['Sound and voice readouts','BUILT','built','Armed by default. Browser unlock happens on the first user click anywhere.'],
+  ['Saved watchlists/settings','PART BUILT','partial','Config exists. Persistent browser storage still needs polishing.'],
+  ['Broker connection','LOCKED','locked','Correctly locked until proof. No live broker execution yet.'],
+  ['Chart click-through','BUILT','built','Clicking a ticker loads the selected chart and trade plan.'],
+  ['Plain-English explanation','BUILT','built','Each selected stock explains entry, exit, warnings and blockers.'],
+  ['Market open/close clock','BUILT','built','Uses Australia/Sydney ASX market session clock from backend.'],
 ];
 
-const sectors = [
-  { name: 'Banks', score: 0, change: '-', leaders: 'From live scan', breadth: '-', note: 'Connect backend data' },
-  { name: 'Materials', score: 0, change: '-', leaders: 'From live scan', breadth: '-', note: 'Connect backend data' },
-  { name: 'Gold', score: 0, change: '-', leaders: 'From live scan', breadth: '-', note: 'Connect backend data' },
-  { name: 'Energy', score: 0, change: '-', leaders: 'From live scan', breadth: '-', note: 'Connect backend data' },
-];
+const fallbackSectors = ['Banks','Materials','Gold','Energy','Healthcare','Lithium','REITs','Tech'];
 
 function money(v){ return `$${Number(v || 0).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}`; }
-function fmtPct(v){ return Number.isFinite(Number(v)) ? `${Number(v).toFixed(2)}%` : '-'; }
+function pct(v){ return Number.isFinite(Number(v)) ? `${Number(v).toFixed(2)}%` : '-'; }
+function timeText(v){ try{return v ? new Date(v).toLocaleTimeString() : '-';}catch{return '-';} }
+function countdown(seconds){ const s=Math.max(0,Number(seconds||0)); const h=Math.floor(s/3600); const m=Math.floor((s%3600)/60); const sec=Math.floor(s%60); return `${h}h ${m}m ${sec}s`; }
 function statusClass(s){ return `pill ${String(s || 'WATCH').toLowerCase()}`; }
-function Card({children, className=''}){ return <section className={`card ${className}`}>{children}</section>; }
-function Stat({icon:Icon,label,value,sub, danger}){ return <Card><div className="statTop"><span className="icon"><Icon size={18}/></span><span className={danger?'sub danger':'sub'}>{sub}</span></div><div className="label">{label}</div><div className="statValue">{value}</div></Card>; }
+function rowStatus(s){ return ['READY','ARMED'].includes(String(s).toUpperCase()) ? 'WAIT FOR PULLBACK' : String(s || 'WATCH'); }
+function buildClass(level){ return `buildBadge ${level}`; }
 
 function normaliseSignal(signal){
-  const entry = Number(signal.entry || 0);
+  const entry = Number(signal.entry || signal.close || signal.price || 0);
+  const score = Math.round(Number(signal.score || signal.total_score || 0));
   return {
     ticker: signal.ticker,
     name: signal.name || signal.ticker,
     sector: signal.sector || 'Unknown',
     price: entry,
-    change: 0,
-    score: Math.round(Number(signal.score || 0)),
-    confidence: Math.round(Number(signal.confidence || 0)),
-    grade: signal.grade || 'D',
-    status: signal.status || 'BLOCKED',
-    setup: signal.setup || 'System scan',
-    rr: Number(signal.risk_reward || 0),
-    volume: Number(signal.volume_multiple || 0),
+    change: Number(signal.change_pct || signal.change || 0),
+    score,
+    confidence: Math.round(Number(signal.confidence || signal.strength || score)),
+    grade: signal.grade || (score >= 85 ? 'A' : score >= 75 ? 'B' : score >= 60 ? 'C' : 'D'),
+    status: signal.status || (score >= 80 ? 'ARMED' : score >= 65 ? 'WATCH' : 'BLOCKED'),
+    setup: signal.setup || signal.pattern || 'System scan',
+    rr: Number(signal.risk_reward || signal.rr || 0),
+    volume: Number(signal.volume_multiple || signal.volume_ratio || 0),
     entry,
-    stop: Number(signal.stop || 0),
+    stop: Number(signal.stop || signal.stop_loss || 0),
     target: Number(signal.target || 0),
+    keyZone: signal.key_zone || signal.buy_zone || '',
     avgDailyValue: Number(signal.avg_daily_value || 0),
     spreadPct: Number(signal.spread_pct || 0),
-    why: signal.reasons || [],
+    why: signal.reasons || signal.why || [],
     risks: [...(signal.risks || []), ...(signal.blockers || [])],
-    chart: []
   };
-}
-
-function countdown(seconds){
-  const s = Math.max(0, Number(seconds || 0));
-  const h = Math.floor(s / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  const sec = Math.floor(s % 60);
-  return `${h}h ${m}m ${sec}s`;
 }
 
 let sharedAudioContext = null;
@@ -97,139 +72,158 @@ function getAudioContext(){
   if(!sharedAudioContext) sharedAudioContext = new AudioContext();
   return sharedAudioContext;
 }
-async function unlockAudioContext(){
+async function unlockAudio(){
   const ctx = getAudioContext();
   if(ctx && ctx.state === 'suspended') await ctx.resume();
   return Boolean(ctx);
 }
-function playTone(enabled, type='entry'){
-  if(!enabled) return;
+function playTone(type='entry'){
   try{
-    const ctx = getAudioContext();
-    if(!ctx) return;
-    const pattern = type === 'stop' ? [260, 190, 160] : type === 'exit' ? [520, 420] : type === 'target' ? [700, 880, 1040] : [880, 1120];
-    pattern.forEach((freq, i)=>{
-      const osc = ctx.createOscillator(); const gain = ctx.createGain();
-      osc.frequency.value = freq; osc.type = 'sine';
-      gain.gain.setValueAtTime(0.0001, ctx.currentTime + i*0.15);
-      gain.gain.exponentialRampToValueAtTime(0.08, ctx.currentTime + i*0.15 + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + i*0.15 + 0.12);
-      osc.connect(gain); gain.connect(ctx.destination);
-      osc.start(ctx.currentTime + i*0.15); osc.stop(ctx.currentTime + i*0.15 + 0.13);
+    const ctx = getAudioContext(); if(!ctx || ctx.state !== 'running') return;
+    const pattern = type === 'stop' ? [260,190,160] : type === 'exit' ? [520,420] : type === 'target' ? [700,880,1040] : [880,1120];
+    pattern.forEach((freq,i)=>{
+      const osc=ctx.createOscillator(); const gain=ctx.createGain();
+      osc.frequency.value=freq; osc.type='sine'; osc.connect(gain); gain.connect(ctx.destination);
+      gain.gain.setValueAtTime(0.0001,ctx.currentTime+i*.15);
+      gain.gain.exponentialRampToValueAtTime(.08,ctx.currentTime+i*.15+.02);
+      gain.gain.exponentialRampToValueAtTime(.0001,ctx.currentTime+i*.15+.12);
+      osc.start(ctx.currentTime+i*.15); osc.stop(ctx.currentTime+i*.15+.13);
     });
-  }catch(e){ console.warn('Sound failed', e); }
+  }catch(e){ console.warn('sound failed', e); }
 }
-function readAloud(enabled, message){
-  if(!enabled || typeof window === 'undefined' || !window.speechSynthesis) return;
-  const u = new SpeechSynthesisUtterance(message);
-  u.rate = 0.9; u.pitch = 1; u.volume = 1;
-  window.speechSynthesis.cancel(); window.speechSynthesis.speak(u);
+function speak(message){
+  if(typeof window === 'undefined' || !window.speechSynthesis) return;
+  try{ const u = new SpeechSynthesisUtterance(message); u.rate=.92; u.pitch=1; u.volume=1; window.speechSynthesis.cancel(); window.speechSynthesis.speak(u); }catch(e){ console.warn('voice failed', e); }
 }
 function voiceMessage(type, stock){
   if(!stock) return 'No stock selected.';
-  if(type === 'entry') return `${stock.ticker} paper entry alert. Entry ${money(stock.entry)}. Stop ${money(stock.stop)}. Target ${money(stock.target)}. Risk reward ${Number(stock.rr || 0).toFixed(2)} R. Exit if stop, target, or invalidation is reached.`;
-  if(type === 'exit') return `${stock.ticker} exit review. Check the trade rules now. Close the paper trade if the exit condition is met.`;
-  if(type === 'stop') return `${stock.ticker} stop alert. The stop area has been reached. Exit the paper trade and record the loss unless manual review overrides it.`;
-  if(type === 'target') return `${stock.ticker} target alert. The target area has been reached. Take profit or trail according to the plan.`;
+  if(type==='entry') return `${stock.ticker} paper trade alert. Entry ${money(stock.entry)}. Buy zone ${stock.keyZone || money(stock.entry)}. Stop ${money(stock.stop)}. Target ${money(stock.target)}. Do not enter if price is outside the buy zone or market conditions fail.`;
+  if(type==='exit') return `${stock.ticker} exit review. Check the exit rules now. Close the paper trade if stop, target or invalidation has triggered.`;
+  if(type==='stop') return `${stock.ticker} stop alert. Exit the paper trade and record the loss unless manual review overrides the signal.`;
+  if(type==='target') return `${stock.ticker} target alert. Take profit or trail the stop according to the plan.`;
   return `${stock.ticker} alert.`;
 }
 
-function MarketClock({clock}){
-  const open = clock?.is_open;
-  return <Card className="clockCard"><h2><Clock3 size={18}/> ASX Market Clock</h2><div className={open?'marketOpen':'marketClosed'}>{clock ? clock.session : 'NO API CLOCK'}</div><p>{clock?.message || 'Connect the backend API to get Australia/Sydney market time.'}</p><div className="miniGrid"><span>Now: {clock?.now_local ? new Date(clock.now_local).toLocaleString() : '-'}</span><span>Next open: {clock?.next_open ? new Date(clock.next_open).toLocaleString() : '-'}</span><span>Next close: {clock?.next_close ? new Date(clock.next_close).toLocaleString() : '-'}</span><span>{open ? `Closes in ${countdown(clock.seconds_to_close)}` : `Opens in ${countdown(clock?.seconds_to_open)}`}</span></div></Card>;
+function TopBox({label,value,sub, danger}){ return <div className="statusCell"><label>{label}</label><b className={danger?'red':''}>{value}</b>{sub && <small className="muted">{sub}</small>}</div>; }
+function TradePopup({trade,onClose}){ if(!trade) return null; return <div className={`tradePopup ${trade.type||'entry'}`}><button onClick={onClose}>CLOSE</button><h3><Bell size={16}/> {trade.type === 'exit' ? 'EXIT REVIEW' : trade.type === 'stop' ? 'STOP ALERT' : trade.type === 'target' ? 'TARGET ALERT' : 'PAPER ENTRY ALERT'}</h3><p><b>{trade.ticker}</b> {trade.message}</p><p className="compactNote">This box closes after 1 minute. Sound/voice is armed after first click anywhere on the page.</p></div>; }
+
+function PriorityCards({rows}){
+  const top = rows.slice(0,3);
+  if(!top.length) return null;
+  return <div className="priorityGrid">{top.map((r,i)=><div className="priority" key={r.ticker}><h4>{i+1}. {r.ticker}</h4><b>{rowStatus(r.status)}</b><span>Entry score: {r.score} | Strength: {r.confidence}</span><small className="muted">{r.rr ? `${r.rr.toFixed(2)}R reward profile` : 'Review buy zone and stop'}</small></div>)}</div>;
 }
 
-function StockChart({ stock, chart, onEntry, onRead }){
-  if(!stock) return <Card><h2>No live signals loaded</h2><p className="muted">Set VITE_API_BASE_URL to your backend and set ASX_DATA_PROVIDER=yfinance on the API service to scan real delayed ASX market data.</p></Card>;
-  const chartData = chart?.length ? chart : stock.chart;
-  return <Card className="chartCard"><div className="chartHead"><div><h2>{stock.ticker} <span className={statusClass(stock.status)}>{stock.status}</span></h2><p>{stock.name} • {stock.sector} • confidence {stock.confidence}/100</p></div><div className="planGrid"><b>Entry<br/><span>{money(stock.entry)}</span></b><b>Stop<br/><span className="red">{money(stock.stop)}</span></b><b>Target<br/><span className="green">{money(stock.target)}</span></b></div></div><div className="tradeActions inline"><button onClick={()=>onEntry(stock)}>Paper Entry Alert</button><button className="ghost" onClick={()=>onRead(stock)}>Read Setup</button></div><div className="chartBox"><ResponsiveContainer width="100%" height={330}><LineChart data={chartData} margin={{top:10,right:20,left:0,bottom:0}}><CartesianGrid stroke="#1e293b" strokeDasharray="3 3"/><XAxis dataKey="d" stroke="#64748b"/><YAxis stroke="#64748b" domain={['dataMin - 2','dataMax + 2']}/><Tooltip contentStyle={{background:'#020617',border:'1px solid #1e293b',color:'#fff'}}/><ReferenceLine y={stock.entry} stroke="#38bdf8" strokeDasharray="5 5"/><ReferenceLine y={stock.stop} stroke="#f87171" strokeDasharray="5 5"/><ReferenceLine y={stock.target} stroke="#34d399" strokeDasharray="5 5"/><Line type="monotone" dataKey="price" stroke="#38bdf8" strokeWidth={3} dot={false}/><Line type="monotone" dataKey="ma20" stroke="#fbbf24" dot={false}/><Line type="monotone" dataKey="ma50" stroke="#a78bfa" dot={false}/></LineChart></ResponsiveContainer></div><div className="explainGrid"><div><h3><CheckCircle2 size={16}/> Why it passed</h3><ul>{(stock.why || []).map(x=><li key={x}>{x}</li>)}</ul></div><div><h3><AlertTriangle size={16}/> Risks / blockers</h3><ul>{(stock.risks || []).map(x=><li key={x}>{x}</li>)}</ul></div><div><h3><BookOpen size={16}/> Costs</h3><p>Costs are modelled in the paper/backtest engine. The trade should be judged on net P/L after entry brokerage, exit brokerage and slippage.</p></div></div></Card>;
+function SignalsTable({rows, selected, setSelected}){
+  return <section className="signalsPanel"><div className="panelHead"><span>Advanced Signals</span><small>Auto-scan watchlist and expandable trade plan</small></div><div className="tableWrap"><table className="signalsTable"><thead><tr><th>Ticker</th><th>Action</th><th>Entry Score</th><th>Strength</th><th>Price</th><th>Key Zone</th><th>Stop</th><th>Target</th><th>R/R</th><th>Reason</th></tr></thead><tbody>{rows.length ? rows.map(r=><tr key={r.ticker} onClick={()=>setSelected(r.ticker)} className={selected===r.ticker?'active':''}><td className="ticker">{r.ticker}</td><td><span className={statusClass(r.status)}>{rowStatus(r.status)}</span></td><td>{r.score}</td><td>{r.confidence}</td><td>{money(r.price)}</td><td>{r.keyZone || `${money(r.entry)} to ${money(r.target)}`}</td><td>{money(r.stop)}</td><td>{money(r.target)}</td><td>{Number(r.rr||0).toFixed(2)}</td><td>{(r.why && r.why[0]) || r.setup || 'Signal generated from scan.'}</td></tr>) : <tr><td colSpan="10" className="emptyBox">No signals loaded yet. Check backend URL and data provider.</td></tr>}</tbody></table></div></section>;
 }
 
-function TradePopup({trade, onClose, soundOn, voiceOn}){
-  if(!trade) return null;
-  const title = trade.type === 'stop' ? 'Stop Alert' : trade.type === 'target' ? 'Target Alert' : trade.type === 'exit' ? 'Exit Review' : 'Paper Entry Alert';
-  return <div className={`tradePopup ${trade.type || 'entry'}`}><div><h3><Bell size={18}/> {title}</h3><button onClick={onClose}>Close</button></div><b>{trade.ticker} needs action</b><p>Entry {money(trade.entry)} • Stop {money(trade.stop)} • Target {money(trade.target)}</p><p>{trade.message}</p><small>Auto closes after 1 minute. Sound {soundOn?'ON':'OFF'} • Voice {voiceOn?'ON':'OFF'}</small></div>;
+function SelectedTrade({stock, marketOpen, onEntry, onExit, onRead}){
+  if(!stock) return <section className="selectedPanel"><div className="panelHead"><span>Selected Trade</span></div><div className="emptyBox">No stock selected.</div></section>;
+  const blocked = !marketOpen;
+  return <section className="selectedPanel"><div className="panelHead"><span>Selected Trade</span><small>{stock.ticker}</small></div><div className="selectedGrid"><div className="selectedStat"><label>Price</label><b>{money(stock.price)}</b></div><div className="selectedStat"><label>Buy Zone</label><b>{stock.keyZone || `${money(stock.entry)} to ${money(stock.target)}`}</b></div><div className="selectedStat"><label>Stop</label><b className="red">{money(stock.stop)}</b></div><div className="selectedStat"><label>Target</label><b className="green">{money(stock.target)}</b></div></div><div className="tradeText"><h3>{stock.ticker} - {rowStatus(stock.status)}</h3><p><b>Action:</b> {blocked ? 'Market closed. Review plan only. No paper entry until ASX opens.' : `Do not enter unless price is inside the buy zone and entry rules still apply.`}</p><p><b>Exit plan:</b> Exit at stop, target, invalidation, or if the signal weakens below threshold.</p><p><b>Setup:</b> {stock.setup}. Score {stock.score}, strength {stock.confidence}, R/R {Number(stock.rr||0).toFixed(2)}.</p><div className="btnRow"><button className="tinyBtn" onClick={()=>onRead(stock)}><Volume2 size={13}/> READ PLAN</button><button className="tinyBtn gold" onClick={()=>onEntry(stock)} disabled={blocked}>{blocked?'MARKET CLOSED':'PAPER ENTRY ALERT'}</button><button className="tinyBtn danger" onClick={()=>onExit(stock)}>EXIT REVIEW</button></div></div><div className="warnings"><b>Warnings:</b><ul>{(stock.risks?.length?stock.risks:['No risk notes returned by backend. Check chart and market clock before action.']).map(x=><li key={x}>{x}</li>)}</ul></div><div className="whyBox"><h4>Why it ranked</h4><ul>{(stock.why?.length?stock.why:['Signal came from scanner ranking. Connect real provider for richer reasons.']).map(x=><li key={x}>{x}</li>)}</ul></div></section>;
 }
-function AudioPanel({soundOn,setSoundOn,voiceOn,setVoiceOn,onUnlock,audioReady,onAlertTest,onRead}){
-  return <Card><h2><Megaphone size={18}/> Sound & Voice Assistant</h2><div className="audioGrid"><button className={audioReady?'ready':'important'} onClick={onUnlock}><RadioTower size={18}/> {audioReady?'Audio unlocked':'Enable sound & voice'}</button><button onClick={()=>setSoundOn(!soundOn)}>{soundOn?<Volume2 size={18}/>:<VolumeX size={18}/>} Sound: {soundOn?'ON':'OFF'}</button><button onClick={()=>setVoiceOn(!voiceOn)}><Megaphone size={18}/> Voice: {voiceOn?'ON':'OFF'}</button><button onClick={onRead}>Read selected setup</button><button onClick={()=>onAlertTest('entry')}><Bell size={18}/> Test entry</button><button onClick={()=>onAlertTest('exit')}><StopCircle size={18}/> Test exit</button></div><p className="muted">Sound will not work until the button is clicked. Also check browser tab mute, system volume and site permissions.</p></Card>;
+
+function ChartPanel({stock, chart}){
+  const data = chart?.length ? chart : [];
+  return <section className="chartPanel"><div className="panelHead"><span>Clean Candlestick Check</span><small>Trend, buy zone, stop and target</small></div><div className="chartWrapper"><div className="chartTitle">{stock?.ticker || 'ASX'}</div><div className="chartBox">{stock && data.length ? <ResponsiveContainer width="100%" height="100%"><ComposedChart data={data} margin={{top:8,right:32,left:0,bottom:0}}><CartesianGrid stroke="#052b18"/><XAxis dataKey="d" stroke="#00aa66" tick={{fontSize:10}}/><YAxis stroke="#00aa66" tick={{fontSize:10}} domain={['dataMin - 2','dataMax + 2']}/><Tooltip contentStyle={{background:'#000905',border:'1px solid #00b86b',color:'#caffdf'}}/><ReferenceLine y={stock.entry} stroke="#f6b73c" strokeDasharray="4 4"/><ReferenceLine y={stock.stop} stroke="#ff3366" strokeDasharray="4 4"/><ReferenceLine y={stock.target} stroke="#00ff88" strokeDasharray="4 4"/><Bar dataKey="volumeScaled" fill="#052b18" yAxisId="vol"/><Line type="monotone" dataKey="price" stroke="#00ff88" strokeWidth={2} dot={false}/><Line type="monotone" dataKey="ma20" stroke="#f6b73c" dot={false}/><Line type="monotone" dataKey="ma50" stroke="#00a1ff" dot={false}/><YAxis yAxisId="vol" hide domain={[0,'dataMax']}/></ComposedChart></ResponsiveContainer> : <div className="emptyBox">Click a stock after signals load to show the chart.</div>}</div></div></section>;
 }
-function TradeJournal({trades}){
+
+function PaperPanel({paper,trades,onReset}){
   const rows = trades || [];
-  return <Card><h2>Paper Trade Journal</h2>{rows.length === 0 ? <p className="muted">No paper trades have been entered yet. This is correct for a fresh $5,000 paper account. The old fake win/loss rows have been removed.</p> : <div className="journalTable"><table><thead><tr>{['ID','Ticker','Side','Entry','Exit','Qty','Net P/L','R','Result','Reason'].map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>{rows.map(t=><tr key={t.trade_id || t.id}><td>{t.trade_id}</td><td>{t.ticker}</td><td>{t.side}</td><td>{money(t.entry_price)}</td><td>{t.exit_price ? money(t.exit_price) : 'OPEN'}</td><td>{t.qty}</td><td className={Number(t.net_pnl)>=0?'green':'red'}>{money(t.net_pnl)}</td><td>{Number(t.r_multiple || 0).toFixed(2)}R</td><td>{t.result}</td><td>{t.exit_reason || '-'}</td></tr>)}</tbody></table></div>}</Card>;
+  return <section className="paperPanel"><div className="panelHead"><span>$5,000 Paper Account</span><small>No fake profits. Only real paper actions appear.</small></div><div className="paperStats"><TopBox label="Trades" value={rows.length}/><TopBox label="Cash" value={money(paper.cash||5000)}/><TopBox label="Equity" value={money(paper.equity||5000)}/><TopBox label="Open Risk" value={money(paper.open_risk||0)}/><TopBox label="Win Rate" value={paper.win_rate ? pct(paper.win_rate) : '0.00%'}/><TopBox label="Closed Trades" value={paper.closed_trades || 0}/><TopBox label="Auto Refresh" value={`${AUTO_REFRESH_MS/1000}s`}/><TopBox label="Status" value="Paper Only"/></div><div className="paperControls"><input placeholder="Manual symbol"/><input placeholder="Manual note"/><button onClick={onReset}>CLEAR PAPER</button></div><div className="activityLog">{rows.length ? rows.slice().reverse().map(t=><p key={t.trade_id || t.id}>{t.ticker} {t.result || 'OPEN'} net {money(t.net_pnl || 0)} reason {t.exit_reason || '-'}</p>) : <p>No paper trades yet. This is correct until a real paper entry is made.</p>}</div></section>;
 }
-function BuildStatusBoard(){ return <Card><h2><CheckCircle size={18}/> Build Status & Real Money Readiness</h2><p className="muted">The free real-data path is now added. Items that still need external licensed data are clearly marked.</p><div className="buildGrid">{buildStatus.map(([item,status,level,detail])=><div key={item} className="buildItem"><div><b>{item}</b><span className={`buildBadge ${level}`}>{status}</span></div><p>{detail}</p></div>)}</div><div className="realMoneyLock"><Lock size={16}/> Real money stays locked until the real-data scan, 10-year test, walk-forward test and at least 50 paper trades pass.</div></Card>; }
+
+function Heatmap({rows}){
+  const grouped = fallbackSectors.map(sec=>{
+    const list = rows.filter(r=>String(r.sector).toLowerCase().includes(sec.toLowerCase()) || (sec==='Gold' && /gold/i.test(r.name||'')) || (sec==='Lithium' && /lithium/i.test(r.name||'')));
+    const avg = list.length ? Math.round(list.reduce((s,x)=>s+x.score,0)/list.length) : 0;
+    return {name:sec, score:avg, count:list.length, leaders:list.slice(0,3).map(x=>x.ticker).join(', ') || 'Waiting'};
+  });
+  return <section className="heatPanel"><div className="panelHead"><span>Australian Heatmap</span><small>Sector strength from current scan list</small></div><div className="heatGrid">{grouped.map(g=><div key={g.name} className={`heatTile ${g.score>=75?'hot':g.score<45?'cold':''}`}><strong>{g.name}</strong><b>{g.score || '-'}</b><small>{g.count} names</small><small>{g.leaders}</small></div>)}</div></section>;
+}
+function Journal({trades}){ return <section className="journalPanel"><div className="panelHead"><span>Paper Trade Journal</span><small>Entries, exits, wins, losses, R multiple and reason</small></div><div className="journalTable"><table><thead><tr>{['ID','Ticker','Side','Entry','Exit','Qty','Net P/L','R','Result','Reason'].map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>{trades?.length ? trades.map(t=><tr key={t.trade_id||t.id}><td>{t.trade_id}</td><td className="ticker">{t.ticker}</td><td>{t.side}</td><td>{money(t.entry_price)}</td><td>{t.exit_price ? money(t.exit_price) : 'OPEN'}</td><td>{t.qty}</td><td className={Number(t.net_pnl)>=0?'green':'red'}>{money(t.net_pnl)}</td><td>{Number(t.r_multiple||0).toFixed(2)}R</td><td>{t.result}</td><td>{t.exit_reason || '-'}</td></tr>) : <tr><td colSpan="10" className="emptyBox">No paper trades recorded.</td></tr>}</tbody></table></div></section>; }
+
+function InstitutionalPanel({readiness, quality}){
+  const items = readiness?.items || [];
+  const risk = readiness?.risk_book || {};
+  return <section className="institutionPanel"><div className="panelHead"><span><ShieldCheck size={15}/> Institutional Risk Desk</span><small>Hedge-fund style readiness, data quality, audit and risk-book view</small></div><div className="paperStats"><TopBox label="Desk Score" value={`${readiness?.score ?? 0}/100`}/><TopBox label="Signals" value={risk.count || 0}/><TopBox label="Ready/Armed" value={risk.ready || 0}/><TopBox label="Blocked" value={risk.blocked || 0}/><TopBox label="Avg Score" value={risk.avg_score || 0}/><TopBox label="Top Sector" value={risk.top_sector || '-'}/><TopBox label="Live Trading" value={readiness?.live_trading_allowed ? 'UNLOCKED' : 'LOCKED'} danger={!readiness?.live_trading_allowed}/><TopBox label="Data QA" value={quality?.passed ? 'PASS' : 'CHECK'} danger={!quality?.passed}/></div><div className="institutionGrid">{items.map((x)=><div key={x.gate} className="institutionItem"><b>{x.gate}</b><span className={buildClass(String(x.status).toLowerCase()==='pass'?'built':String(x.status).toLowerCase()==='warn'?'partial':String(x.status).toLowerCase()==='locked'?'locked':String(x.status).toLowerCase()==='blocked'?'blocked':'planned')}>{x.status}</span><p>{x.note}</p></div>)}</div>{quality && <div className="qaBox"><h4><Database size={14}/> Selected Data Quality: {quality.ticker}</h4><p>Rows: {quality.rows} • First: {quality.first_date || '-'} • Last: {quality.last_date || '-'} • Stale days: {quality.stale_days}</p>{quality.warnings?.length ? <ul>{quality.warnings.map(w=><li key={w}>{w}</li>)}</ul> : <p>No major data warnings returned.</p>}</div>}</section>;
+}
+
+function BuildStatusBoard(){ return <section className="buildPanel"><div className="panelHead"><span><CheckCircle size={15}/> Build Status</span><small>What is built vs what still needs licensed data</small></div><div className="buildGrid">{buildStatus.map(([item,status,level,detail])=><div key={item} className="buildItem"><b>{item}</b><span className={buildClass(level)}>{status}</span><p>{detail}</p></div>)}</div></section>; }
 
 function App(){
-  const [signals, setSignals] = useState(DEMO_MODE ? demoStocks : {});
-  const [selected, setSelected] = useState(DEMO_MODE ? 'CBA' : '');
-  const [chart, setChart] = useState([]);
-  const [marketClock, setMarketClock] = useState(null);
-  const [paper, setPaper] = useState({cash: 5000, equity: 5000});
-  const [trades, setTrades] = useState([]);
-  const [apiStatus, setApiStatus] = useState(API_BASE ? 'Connecting to backend...' : 'Backend API not connected. Set VITE_API_BASE_URL.');
-  const [lastRefresh, setLastRefresh] = useState('-');
-  const [soundOn, setSoundOn] = useState(true);
-  const [voiceOn, setVoiceOn] = useState(true);
-  const [audioReady, setAudioReady] = useState(false);
-  const [tradeAlert, setTradeAlert] = useState(null);
+  const [signals,setSignals] = useState({});
+  const [selected,setSelected] = useState('');
+  const [chart,setChart] = useState([]);
+  const [clock,setClock] = useState(null);
+  const [paper,setPaper] = useState({cash:5000,equity:5000});
+  const [trades,setTrades] = useState([]);
+  const [apiStatus,setApiStatus] = useState('Connecting');
+  const [scanMessage,setScanMessage] = useState('Waiting for scan.');
+  const [lastRefresh,setLastRefresh] = useState('-');
+  const [soundArmed,setSoundArmed] = useState(false);
+  const [paused,setPaused] = useState(false);
+  const [tradeAlert,setTradeAlert] = useState(null);
+  const [readiness,setReadiness] = useState(null);
+  const [quality,setQuality] = useState(null);
+  const didSpeakRef = useRef(false);
   const rows = useMemo(()=>Object.values(signals).sort((a,b)=>b.score-a.score),[signals]);
   const stock = selected ? signals[selected] : rows[0];
 
-  async function api(path, options){
-    if(!API_BASE) throw new Error('No VITE_API_BASE_URL configured');
-    const res = await fetch(`${API_BASE}${path}`, {cache:'no-store', ...(options || {})});
-    if(!res.ok) throw new Error(`${path} HTTP ${res.status}`);
-    return res.json();
-  }
+  async function api(path, options){ const res = await fetch(`${API_BASE}${path}`, {cache:'no-store', ...(options||{})}); if(!res.ok) throw new Error(`${path} HTTP ${res.status}`); return res.json(); }
   async function refreshAll(){
+    if(paused) return;
     try{
-      const [clockPayload, signalsPayload, paperPayload, tradesPayload] = await Promise.all([
-        api('/market-clock'), api('/signals'), api('/paper'), api('/paper/trades')
-      ]);
-      const next = {};
-      (signalsPayload.signals || []).forEach(sig=>{ const row = normaliseSignal(sig); next[row.ticker] = row; });
-      setMarketClock(clockPayload);
-      setSignals(next);
-      setSelected(prev => next[prev] ? prev : Object.keys(next)[0] || '');
-      setPaper(paperPayload);
-      setTrades(tradesPayload.trades || []);
-      setLastRefresh(new Date().toLocaleTimeString());
-      setApiStatus(`Connected • provider ${signalsPayload.provider || 'unknown'} • history ${signalsPayload.period || '-'}`);
-    }catch(err){ setApiStatus(`API problem: ${err.message}`); }
+      const [clockPayload, signalsPayload, paperPayload, tradesPayload, readyPayload] = await Promise.all([api('/market-clock'), api('/signals'), api('/paper'), api('/paper/trades'), api('/institutional-readiness')]);
+      const next = {}; (signalsPayload.signals||[]).forEach(sig=>{ const r=normaliseSignal(sig); next[r.ticker]=r; });
+      setClock(clockPayload); setSignals(next); setSelected(prev=>next[prev]?prev:Object.keys(next)[0]||''); setPaper(paperPayload||{cash:5000,equity:5000}); setTrades(tradesPayload.trades||[]);
+      setReadiness(readyPayload); setLastRefresh(new Date().toLocaleTimeString()); setScanMessage(signalsPayload.message || 'Scan complete.'); setApiStatus(`Connected • ${signalsPayload.provider || 'provider'} • ${signalsPayload.period || '-'} • ${signalsPayload.mode || 'scan'}`);
+    }catch(err){ setApiStatus(`API problem: ${err.message}`); setScanMessage('Backend is not returning scan data. Check Render API URL and logs.'); }
   }
-  useEffect(()=>{ refreshAll(); const timer = setInterval(refreshAll, AUTO_REFRESH_MS); return ()=>clearInterval(timer); },[]);
+  useEffect(()=>{ refreshAll(); const timer=setInterval(refreshAll,AUTO_REFRESH_MS); return()=>clearInterval(timer); },[paused]);
   useEffect(()=>{
-    if(!stock || !API_BASE) return;
-    api(`/prices/${stock.ticker}`).then(payload=>{
-      const prices = payload.prices || [];
-      const mapped = prices.slice(-120).map((p, i)=>({d: String(p.date).slice(5,10), price: Number(p.close), ma20: undefined, ma50: undefined, volume: Number(p.volume || 0)}));
-      const withMa = mapped.map((row, i, arr)=>{
-        const avg = (n)=> i+1<n ? undefined : arr.slice(i+1-n, i+1).reduce((s,x)=>s+x.price,0)/n;
-        return {...row, ma20: avg(20), ma50: avg(50)};
-      });
+    async function unlockOnFirstClick(){ const ok=await unlockAudio(); setSoundArmed(ok); if(ok && !didSpeakRef.current){ didSpeakRef.current=true; speak('ASX scanner sound and voice alerts are armed.'); playTone('target'); } }
+    window.addEventListener('pointerdown', unlockOnFirstClick, {once:true});
+    return()=>window.removeEventListener('pointerdown', unlockOnFirstClick);
+  },[]);
+  useEffect(()=>{
+    if(!stock) return; api(`/prices/${stock.ticker}`).then(payload=>{
+      const prices = (payload.prices||[]).slice(-130);
+      const mapped = prices.map(p=>({d:String(p.date).slice(5,10), price:Number(p.close), volume:Number(p.volume||0)}));
+      const maxVol = Math.max(...mapped.map(x=>x.volume),1);
+      const withMa = mapped.map((row,i,arr)=>{ const avg=n=>i+1<n?undefined:arr.slice(i+1-n,i+1).reduce((s,x)=>s+x.price,0)/n; return {...row, ma20:avg(20), ma50:avg(50), volumeScaled: row.price - (row.volume/maxVol)*2}; });
       setChart(withMa);
     }).catch(()=>setChart([]));
+    api(`/data-quality/${stock.ticker}`).then(setQuality).catch(()=>setQuality(null));
   },[selected]);
-  useEffect(()=>{ if(!tradeAlert) return; const t=setTimeout(()=>setTradeAlert(null),60000); return ()=>clearTimeout(t); },[tradeAlert]);
-
-  const unlock = async()=>{ const ok = await unlockAudioContext(); setAudioReady(ok); playTone(soundOn, 'target'); readAloud(voiceOn, 'Sound and voice alerts are now enabled for paper trading.'); };
-  const triggerAlert = (type, s=stock)=>{ if(!s) return; const message = voiceMessage(type, s); setTradeAlert({...s,type,message}); playTone(soundOn && audioReady, type); readAloud(voiceOn && audioReady, message); };
-  const readSetup = (s=stock)=> readAloud(voiceOn && audioReady, voiceMessage('entry', s));
+  useEffect(()=>{ if(!tradeAlert) return; const t=setTimeout(()=>setTradeAlert(null),60000); return()=>clearTimeout(t); },[tradeAlert]);
+  function trigger(type,s=stock){ if(!s) return; const msg=voiceMessage(type,s); setTradeAlert({...s,type,message:msg}); if(soundArmed) {playTone(type); speak(msg);} }
+  function readPlan(s=stock){ if(s && soundArmed) speak(voiceMessage('entry',s)); }
+  async function resetPaper(){ try{ await api('/paper/reset',{method:'POST'}); refreshAll(); }catch(e){ setScanMessage(`Paper reset failed: ${e.message}`); } }
 
   const marketScore = rows.length ? Math.round(rows.reduce((s,x)=>s+x.score,0)/rows.length) : 0;
-  const readyCount = rows.filter(r=>['READY','ARMED'].includes(r.status)).length;
-  const bestSector = rows[0]?.sector || '-';
+  const ready = rows.filter(r=>['READY','ARMED'].includes(String(r.status).toUpperCase())).length;
+  const best = rows[0]?.sector || '-';
+  const open = Boolean(clock?.is_open);
 
   return <main>
-    <header className="hero"><div><h1><Flame/> TRADERS SUCCESS FORMULA: ASX</h1><p>Real-data scanner mode. Auto refresh every {AUTO_REFRESH_MS/1000}s. {apiStatus}. Last refresh: {lastRefresh}</p></div><div className="actions"><button onClick={refreshAll}><Search size={16}/>Refresh now</button><button className="ghost"><BarChart3 size={16}/>Backtest</button><button className="lock"><Lock size={16}/>Live Locked</button></div></header>
-    <AudioPanel soundOn={soundOn} setSoundOn={setSoundOn} voiceOn={voiceOn} setVoiceOn={setVoiceOn} onUnlock={unlock} audioReady={audioReady} onAlertTest={(type)=>triggerAlert(type, stock)} onRead={()=>readSetup(stock)}/>
-    <MarketClock clock={marketClock}/>
-    <div className="stats"><Stat icon={Activity} label="Market Score" value={marketScore} sub={marketClock?.session || 'NO CLOCK'}/><Stat icon={TrendingUp} label="Best Sector" value={bestSector} sub="FROM SCAN"/><Stat icon={Target} label="Ready/Armed" value={readyCount} sub="REAL SCAN"/><Stat icon={ShieldCheck} label="Risk Per Trade" value="0.50%" sub="PAPER"/><Stat icon={WalletCards} label="Paper Equity" value={money(paper.equity || 5000)} sub="$5K START"/></div>
-    <div className="gridMain"><Card className="signals"><div className="sectionHead"><h2>Top ASX Signals</h2><span><MousePointerClick size={14}/> click a ticker</span></div>{rows.length === 0 ? <p className="muted">No real signals loaded. Connect the backend API and use ASX_DATA_PROVIDER=yfinance for delayed ASX data.</p> : rows.map(r=><button key={r.ticker} onClick={()=>setSelected(r.ticker)} className={selected===r.ticker?'row active':'row'}><b>{r.ticker}<small>{money(r.price)} <em>{fmtPct(r.change)}</em></small></b><span>{r.setup}</span><span className="score"><i style={{width:`${r.score}%`}}/> {r.score}</span><span>{Number(r.rr || 0).toFixed(2)}R<br/><small>{Number(r.volume || 0).toFixed(2)}x vol</small></span><span className={statusClass(r.status)}>{r.status}</span></button>)}</Card><Card><h2><Radio size={18}/> Alerts</h2><div className={marketClock?.is_open ? 'alert' : 'alert bad'}>{marketClock?.is_open ? 'Market open: scan and paper alerts active.' : 'Market closed: no new paper entries should be treated as live.'}</div><div className="paper"><h3>Paper Account</h3><p>Starting cash: $5,000</p><p>Cash: {money(paper.cash || 5000)}</p><p>Equity: {money(paper.equity || 5000)}</p><p>Open risk: {money(paper.open_risk || 0)}</p><p>Trades: {trades.length}</p></div></Card></div>
-    <StockChart stock={stock} chart={chart} onEntry={(s)=>triggerAlert('entry', s)} onRead={readSetup}/><TradePopup trade={tradeAlert} onClose={()=>setTradeAlert(null)} soundOn={soundOn} voiceOn={voiceOn}/>
-    <div className="tabsGrid"><Card><h2><Gauge size={18}/> Understand</h2><p>The system now explains when it is safe to scan, whether the ASX is open, why each signal exists, and whether the paper account is taking real paper trades or staying flat.</p></Card><Card><h2><Layers size={18}/> Heatmap</h2><div className="heatmap">{sectors.map(s=><div key={s.name} className={s.score>=70?'hot':s.score<45?'cold':'neutral'}><b>{s.name}</b><strong>{s.score}</strong><small>{s.change}</small><em>{s.breadth}</em><em>{s.note}</em></div>)}</div></Card></div>
-    <div className="tabsGrid"><Card><h2>Backtest Equity Curve</h2><ResponsiveContainer width="100%" height={220}><AreaChart data={[]}><XAxis dataKey="week" stroke="#64748b"/><YAxis stroke="#64748b"/><Tooltip/><Area type="monotone" dataKey="value" stroke="#38bdf8" fill="#38bdf8" fillOpacity={0.15}/></AreaChart></ResponsiveContainer><p className="muted">No fake backtest chart shown. Run real 10-year backtest from backend/CLI to populate this.</p></Card><Card><h2>Setup Performance</h2><ResponsiveContainer width="100%" height={220}><BarChart data={[]}><XAxis dataKey="name" stroke="#64748b"/><YAxis stroke="#64748b"/><Tooltip/><Bar dataKey="score" fill="#38bdf8" radius={[8,8,0,0]}/></BarChart></ResponsiveContainer><p className="muted">No fake performance shown until real testing runs.</p></Card></div>
-    <TradeJournal trades={trades}/><BuildStatusBoard/>
+    <div className="header">
+      <div className="titleBox terminal"><h1><Flame size={18}/> ASX Trade Scanner</h1><p><span className={API_BASE ? 'connectionDot':'connectionDot bad'}></span>{apiStatus}. Auto-refresh {AUTO_REFRESH_MS/1000}s. Last scan {lastRefresh}</p><p className="audioTiny">Sound/voice: {soundArmed?'ON':'click anywhere to arm'} • No test buttons</p></div>
+      <div className="statusGrid"><TopBox label="Local Time" value={new Date().toLocaleTimeString()}/><TopBox label="ASX Market" value={clock?.session || 'Unknown'} danger={!open}/><TopBox label="Market Countdown" value={open?`closes in ${countdown(clock?.seconds_to_close)}`:`opens in ${countdown(clock?.seconds_to_open)}`}/><TopBox label="Next Scan" value={`${AUTO_REFRESH_MS/1000}s`}/><TopBox label="Equity" value={money(paper.equity||5000)}/></div>
+      <div className="soundBox"><button className="scanBtn" onClick={refreshAll}><Search size={14}/> SCAN NOW</button><button className="pauseBtn" onClick={()=>setPaused(!paused)}>{paused?<Play size={14}/>:<Pause size={14}/>} {paused?'RESUME':'PAUSE'}</button></div>
+    </div>
+    <div className="banner"><h3>High-level signal now</h3><p>{rows[0] ? `${rows[0].ticker} is the current top-ranked candidate. ${scanMessage}` : scanMessage}</p></div>
+    {!open && <div className="banner warn"><h3>Scanner resumed after-hours</h3><p>Market is closed, but candidates still show for planning. Paper entries are blocked until the ASX is open.</p></div>}
+    <PriorityCards rows={rows}/>
+    <SignalsTable rows={rows} selected={stock?.ticker || selected} setSelected={setSelected}/>
+    <SelectedTrade stock={stock} marketOpen={open} onEntry={(s)=>trigger('entry',s)} onExit={(s)=>trigger('exit',s)} onRead={readPlan}/>
+    <ChartPanel stock={stock} chart={chart}/>
+    <PaperPanel paper={paper} trades={trades} onReset={resetPaper}/>
+    <Journal trades={trades}/>
+    <InstitutionalPanel readiness={readiness} quality={quality}/>
+    <Heatmap rows={rows}/>
+    <BuildStatusBoard/>
+    <TradePopup trade={tradeAlert} onClose={()=>setTradeAlert(null)}/>
   </main>;
 }
 
