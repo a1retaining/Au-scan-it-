@@ -263,3 +263,24 @@ npm start
 ```
 
 The root `npm start` runs `server.mjs`, which binds to Render's `$PORT`. Do not use `vite preview` directly as the Render start command.
+
+## Real delayed ASX data mode
+
+For a real delayed data test on Render, set the backend environment variables:
+
+```bash
+ASX_DATA_PROVIDER=yfinance
+ASX_HISTORY_PERIOD=10y
+```
+
+The frontend must have:
+
+```bash
+VITE_API_BASE_URL=https://your-api-service.onrender.com
+VITE_AUTO_REFRESH_MS=60000
+VITE_DEMO_MODE=false
+```
+
+The dashboard will not show fake trades or fake profit. It will show no paper trades until trades are actually entered into the paper account.
+
+See `docs/REAL_DATA_AND_MARKET_CLOCK.md`.

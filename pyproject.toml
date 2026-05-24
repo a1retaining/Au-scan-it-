@@ -8,7 +8,7 @@ version = "0.2.0"
 description = "Australian Traders Success Formula scanner, backtester and paper account."
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = ["pandas>=2.0", "numpy>=1.24", "fastapi>=0.110", "uvicorn>=0.27"]
+dependencies = ["pandas>=2.0", "numpy>=1.24", "fastapi>=0.110", "uvicorn>=0.27", "yfinance>=0.2.50"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

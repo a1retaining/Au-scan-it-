@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Dict
 from datetime import datetime, timezone
+import os
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,8 +12,9 @@ from pydantic import BaseModel
 from .models import TradeSignal, SignalStatus
 from .paper import PaperAccount
 from .scanner import scan_watchlist
+from .market_clock import get_market_clock
 
-app = FastAPI(title="ASX Trade Finder API", version="0.4.0")
+app = FastAPI(title="ASX Trade Finder API", version="0.5.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -25,6 +27,8 @@ app.add_middleware(
 WATCHLIST = Path("data/sample/sample_watchlist.csv")
 PRICES = Path("data/sample/prices")
 PAPER_PATH = Path("paper_accounts/default.json")
+DATA_PROVIDER = os.getenv("ASX_DATA_PROVIDER", "csv")
+DATA_PERIOD = os.getenv("ASX_HISTORY_PERIOD", "10y")
 
 
 class ManualPaperEntry(BaseModel):
@@ -69,23 +73,49 @@ def keepalive() -> Dict[str, str]:
     return {"status": "awake", "time_utc": datetime.now(timezone.utc).isoformat()}
 
 
+@app.get("/market-clock")
+def market_clock():
+    return get_market_clock()
+
+
 @app.get("/signals")
-def signals():
-    data = scan_watchlist(WATCHLIST, PRICES).to_dict(orient="records")
-    return {"refreshed_at": datetime.now(timezone.utc).isoformat(), "count": len(data), "signals": data}
+def signals(provider: str | None = None, period: str | None = None):
+    kind = provider or DATA_PROVIDER
+    hist = period or DATA_PERIOD
+    data = scan_watchlist(WATCHLIST, PRICES, kind, hist).to_dict(orient="records")
+    return {"refreshed_at": datetime.now(timezone.utc).isoformat(), "provider": kind, "period": hist, "market_clock": get_market_clock(), "count": len(data), "signals": data}
 
 
 @app.post("/refresh")
-def refresh_signals():
-    """Force a scan refresh. Uses sample CSV provider until a real ASX provider is connected."""
-    data = scan_watchlist(WATCHLIST, PRICES).to_dict(orient="records")
-    return {"ok": True, "refreshed_at": datetime.now(timezone.utc).isoformat(), "count": len(data), "signals": data}
+def refresh_signals(provider: str | None = None, period: str | None = None):
+    """Force a scan refresh. Set ASX_DATA_PROVIDER=yfinance for delayed real ASX data."""
+    kind = provider or DATA_PROVIDER
+    hist = period or DATA_PERIOD
+    data = scan_watchlist(WATCHLIST, PRICES, kind, hist).to_dict(orient="records")
+    return {"ok": True, "refreshed_at": datetime.now(timezone.utc).isoformat(), "provider": kind, "period": hist, "market_clock": get_market_clock(), "count": len(data), "signals": data}
+
+
+@app.get("/prices/{ticker}")
+def prices(ticker: str, provider: str | None = None, period: str | None = None):
+    """Return recent OHLCV history for chart click-through.
+
+    Uses ASX_DATA_PROVIDER=yfinance for delayed real ASX prices or csv for sample testing.
+    """
+    from .data_provider import get_data_provider
+    kind = provider or DATA_PROVIDER
+    hist = period or DATA_PERIOD
+    prov = get_data_provider(kind, PRICES, hist)
+    df = prov.load_prices(ticker.upper()).tail(260).copy()
+    df["date"] = df["date"].astype(str)
+    return {"ticker": ticker.upper(), "provider": kind, "period": hist, "count": len(df), "prices": df.to_dict(orient="records")}
 
 
 @app.get("/paper")
 def paper_account():
     account = get_account()
-    return account.mark_to_market({})
+    result = account.mark_to_market({})
+    result["market_clock"] = get_market_clock()
+    return result
 
 
 @app.get("/paper/trades")

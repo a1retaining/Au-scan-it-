@@ -1,16 +1,8 @@
-ASX Trade Finder Pro v9 verification
+ASX Trade Finder Pro v12 verification
 
-Frontend:
-- npm run build from repo root: passed
-- npm start from repo root: passed, Vite preview served on PORT/default 10000
-
-Backend:
-- python tests: 12 passed
-- sample scanner: passed with PYTHONPATH=src, and works after pip install -e .
-- sample backtest: passed with PYTHONPATH=src, and works after pip install -e .
-
-Render fix:
-- root npm start now installs frontend dependencies if node_modules is missing
-- root npm start builds frontend/dist if dist is missing
-- root npm start runs Vite preview on ${PORT:-10000}
-- docs/RENDER_DEPLOYMENT.md updated
+Backend tests: 16 passed
+Frontend production build: passed
+Frontend static server /health: passed
+Scanner sample run: passed
+Backtest sample run: passed
+Added: yfinance delayed ASX provider, 10-year period support, market clock, no fake paper trades, no fake profit, chart price endpoint, voice/sound unlock controls.

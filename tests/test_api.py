@@ -37,3 +37,20 @@ def test_refresh_endpoint():
     payload = response.json()
     assert payload['ok'] is True
     assert 'signals' in payload
+
+
+def test_market_clock_endpoint():
+    response = client.get('/market-clock')
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload['timezone'] == 'Australia/Sydney'
+    assert 'session' in payload
+
+
+def test_prices_endpoint_returns_chart_data():
+    response = client.get('/prices/CBA')
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload['ticker'] == 'CBA'
+    assert isinstance(payload['prices'], list)
+    assert len(payload['prices']) > 0

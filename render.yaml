@@ -6,6 +6,11 @@ services:
     buildCommand: pip install -r requirements.txt && pip install -e .
     startCommand: uvicorn asx_trade_finder.api:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
+    envVars:
+      - key: ASX_DATA_PROVIDER
+        value: yfinance
+      - key: ASX_HISTORY_PERIOD
+        value: "10y"
 
   - type: web
     name: asx-trade-finder-frontend
@@ -19,3 +24,5 @@ services:
         value: https://asx-trade-finder-api.onrender.com
       - key: VITE_AUTO_REFRESH_MS
         value: "60000"
+      - key: VITE_DEMO_MODE
+        value: "false"
