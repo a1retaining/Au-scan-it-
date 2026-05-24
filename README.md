@@ -199,3 +199,30 @@ backtest sample run: passed
 ```
 
 See `docs/TESTING_AND_GITHUB.md`.
+
+## Render deployment fix
+
+If Render shows this error:
+
+```text
+npm error enoent Could not read package.json: Error: ENOENT: no such file or directory, open '/opt/render/project/src/package.json'
+```
+
+it means Render is building from the repository root while the frontend app is inside `frontend/`.
+
+This repo now includes a root `package.json`, so root builds work. For the cleanest Render frontend setup use:
+
+```text
+Root Directory: frontend
+Build Command: npm ci && npm run build
+Publish Directory: dist
+```
+
+For the API service use:
+
+```text
+Build Command: pip install -r requirements.txt && pip install -e .
+Start Command: uvicorn asx_trade_finder.api:app --host 0.0.0.0 --port $PORT
+```
+
+A `render.yaml` blueprint is also included.

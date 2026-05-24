@@ -1,12 +1,23 @@
-ASX Trade Finder Pro v7 verification
+ASX Trade Finder Pro v8 verification
 
-Backend tests: 12 passed
-Scanner sample run: passed, outputs/scanner_output.csv and outputs/scanner_output.json generated
-Backtest sample run: passed, outputs/backtest_results.csv generated
-Frontend build: passed with Vite
+Fix applied:
+- Added root package.json so Render no longer fails looking for /opt/render/project/src/package.json.
+- Added root package-lock.json.
+- Added render.yaml blueprint for API + frontend deployment.
+- Added docs/RENDER_DEPLOYMENT.md.
 
-Commands used:
-pytest -q
-python -m asx_trade_finder.scanner --input data/sample/sample_watchlist.csv --prices data/sample/prices --output outputs/scanner_output.csv --json-output outputs/scanner_output.json
-python -m asx_trade_finder.backtest --input data/sample/sample_watchlist.csv --prices data/sample/prices --output outputs/backtest_results.csv
-cd frontend && npm ci && npm run build
+Verified:
+- Root npm run build: passed
+- Frontend Vite production build: passed
+- Backend tests: 12 passed
+- Scanner sample run: passed using PYTHONPATH=src
+- Backtest sample run: passed using PYTHONPATH=src
+
+Render frontend settings:
+Root Directory: frontend
+Build Command: npm ci && npm run build
+Publish Directory: dist
+
+Render API settings:
+Build Command: pip install -r requirements.txt && pip install -e .
+Start Command: uvicorn asx_trade_finder.api:app --host 0.0.0.0 --port $PORT
