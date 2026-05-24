@@ -1,0 +1,133 @@
+[
+  {
+    "ticker":"CBA",
+    "name":"Commonwealth Bank",
+    "sector":"Banks",
+    "setup":"Pullback in uptrend",
+    "score":82.0,
+    "grade":"A",
+    "status":"ARMED",
+    "entry":126.28,
+    "stop":122.52,
+    "target":133.79,
+    "risk_reward":2.0,
+    "volume_multiple":1.36,
+    "avg_daily_value":778860095.6699999571,
+    "spread_pct":0.002,
+    "reasons":[
+      "Price is above the 20-day average",
+      "Price is above the 50-day average",
+      "Banks sector is leading",
+      "Pullback is holding above key trend averages",
+      "20-day momentum is positive",
+      "Liquidity passes minimum average daily value"
+    ],
+    "risks":[
+      "200-day trend is unavailable"
+    ],
+    "blockers":[
+      "Risk-to-reward is below 2R"
+    ],
+    "confidence":73.7,
+    "plain_english":"CBA is ARMED. It is close to a valid trade, but it still needs the trigger to confirm. Current score: 82\/100. Main read: Price is above the 20-day average Price is above the 50-day average Banks sector is leading Pullback is holding above key trend averages Blockers: Risk-to-reward is below 2R"
+  },
+  {
+    "ticker":"BHP",
+    "name":"BHP Group",
+    "sector":"Materials",
+    "setup":"Pullback in uptrend",
+    "score":76.6,
+    "grade":"B",
+    "status":"ARMED",
+    "entry":52.68,
+    "stop":51.18,
+    "target":55.68,
+    "risk_reward":2.0,
+    "volume_multiple":0.68,
+    "avg_daily_value":584831494.9500000477,
+    "spread_pct":0.0025,
+    "reasons":[
+      "Price is above the 20-day average",
+      "Price is above the 50-day average",
+      "Materials sector is leading",
+      "Pullback is holding above key trend averages",
+      "20-day momentum is positive",
+      "Risk-to-reward is acceptable",
+      "Liquidity passes minimum average daily value"
+    ],
+    "risks":[
+      "200-day trend is unavailable",
+      "Volume is below normal"
+    ],
+    "blockers":[
+
+    ],
+    "confidence":76.5,
+    "plain_english":"BHP is ARMED. It is close to a valid trade, but it still needs the trigger to confirm. Current score: 77\/100. Main read: Price is above the 20-day average Price is above the 50-day average Materials sector is leading Pullback is holding above key trend averages Blockers: No hard blockers were recorded."
+  },
+  {
+    "ticker":"WES",
+    "name":"Wesfarmers",
+    "sector":"Consumer",
+    "setup":"Pullback in uptrend",
+    "score":75.3,
+    "grade":"B",
+    "status":"ARMED",
+    "entry":60.99,
+    "stop":59.08,
+    "target":64.81,
+    "risk_reward":2.0,
+    "volume_multiple":0.79,
+    "avg_daily_value":119162674.7300000042,
+    "spread_pct":0.003,
+    "reasons":[
+      "Price is above the 20-day average",
+      "Price is above the 50-day average",
+      "Pullback is holding above key trend averages",
+      "20-day momentum is positive",
+      "Liquidity passes minimum average daily value"
+    ],
+    "risks":[
+      "200-day trend is unavailable",
+      "Volume is below normal"
+    ],
+    "blockers":[
+      "Risk-to-reward is below 2R"
+    ],
+    "confidence":63.1,
+    "plain_english":"WES is ARMED. It is close to a valid trade, but it still needs the trigger to confirm. Current score: 75\/100. Main read: Price is above the 20-day average Price is above the 50-day average Pullback is holding above key trend averages 20-day momentum is positive Blockers: Risk-to-reward is below 2R"
+  },
+  {
+    "ticker":"CSL",
+    "name":"CSL Limited",
+    "sector":"Healthcare",
+    "setup":"Pullback in uptrend",
+    "score":71.7,
+    "grade":"B",
+    "status":"WATCH",
+    "entry":305.31,
+    "stop":296.16,
+    "target":323.62,
+    "risk_reward":2.0,
+    "volume_multiple":0.66,
+    "avg_daily_value":310496715.6899999976,
+    "spread_pct":0.0035,
+    "reasons":[
+      "Price is above the 20-day average",
+      "Price is above the 50-day average",
+      "Pullback is holding above key trend averages",
+      "20-day momentum is positive",
+      "Risk-to-reward is acceptable",
+      "Liquidity passes minimum average daily value"
+    ],
+    "risks":[
+      "200-day trend is unavailable",
+      "Volume is below normal"
+    ],
+    "blockers":[
+      "Healthcare sector is weak"
+    ],
+    "confidence":64.2,
+    "plain_english":"CSL is on WATCH. It has some good features, but the edge is not strong enough yet. Current score: 72\/100. Main read: Price is above the 20-day average Price is above the 50-day average Pullback is holding above key trend averages 20-day momentum is positive Blockers: Healthcare sector is weak"
+  }
+]

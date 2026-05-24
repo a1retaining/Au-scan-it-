@@ -1,0 +1,5 @@
+ticker,setup,score,grade,status,entry,stop,target,exit_price,exit_reason,qty,gross_pnl,entry_brokerage,exit_brokerage,total_brokerage,total_slippage,total_costs,net_pnl,result_r
+CBA,Pullback in uptrend,79.0,B,ARMED,122.59,118.83,130.11,126.28,Timed exit,6,21.39,9.5,9.5,19.0,0.75,19.75,2.39,0.11
+BHP,Momentum breakout,86.1,A,READY,52.05,50.25,55.65,52.68,Timed exit,13,7.51,9.5,9.5,19.0,0.68,19.68,-11.49,-0.49
+WES,Pullback in uptrend,58.0,D,BLOCKED,60.52,58.93,63.69,60.99,Timed exit,15,6.14,9.5,9.5,19.0,0.91,19.91,-12.86,-0.54
+CSL,Pullback in uptrend,59.8,D,BLOCKED,304.75,294.49,325.27,305.31,Timed exit,2,0.51,9.5,9.5,19.0,0.61,19.61,-18.49,-0.9
