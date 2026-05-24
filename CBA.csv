@@ -1,0 +1,33 @@
+name: Keep Render Warm
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Render keepalive endpoints
+        env:
+          KEEPALIVE_URLS: ${{ secrets.KEEPALIVE_URLS }}
+        run: |
+          if [ -z "$KEEPALIVE_URLS" ]; then
+            echo "KEEPALIVE_URLS secret is not set. Skipping."
+            exit 0
+          fi
+          python - <<'PY'
+          import os, urllib.request, sys, time
+          urls=[u.strip() for u in os.environ.get('KEEPALIVE_URLS','').split(',') if u.strip()]
+          failed=False
+          for url in urls:
+              try:
+                  with urllib.request.urlopen(url, timeout=20) as r:
+                      print(f"{url} -> {r.status}")
+              except Exception as e:
+                  failed=True
+                  print(f"{url} -> ERROR {e}", file=sys.stderr)
+              time.sleep(1)
+          raise SystemExit(1 if failed else 0)
+          PY

@@ -1,334 +1,71 @@
-# Traders Success Formula: ASX
-
-## Current deploy build
-
-Expected frontend health build id: `AU-ASX-INSTITUTIONAL-DESK-V19`.
-
-Check after deploy: `https://YOUR-FRONTEND.onrender.com/health`.
-
-
-A GitHub-ready Australian trading system project with:
-
-- ASX signal scanner
-- scoring engine
-- risk manager
-- paper trading account
-- simple backtest runner
-- FastAPI backend
-- React/Vite frontend dashboard
-- sample ASX-style data
-- tests
-
-This is a research and paper-trading project. It is **not financial advice** and it must not be connected to real-money execution until the system has passed historical testing, walk-forward testing, paper trading, slippage modelling and risk review.
-
-## What the user sees
-
-The front end is a dark command-centre dashboard:
-
-- market score
-- best sector
-- A-grade setups
-- paper account equity
-- clickable stock signals
-- chart panel with entry, stop and target
-- plain-English signal explanations
-- heatmap
-- backtest charts
-- paper account section
-- live-money locked status
-
-## Install backend
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-pip install -e .
-pytest
-```
-
-## Run scanner
-
-```bash
-python -m asx_trade_finder.scanner \
-  --input data/sample/sample_watchlist.csv \
-  --prices data/sample/prices \
-  --output outputs/scanner_output.csv
-```
-
-## Run backtest
-
-```bash
-python -m asx_trade_finder.backtest \
-  --input data/sample/sample_watchlist.csv \
-  --prices data/sample/prices \
-  --output outputs/backtest_results.csv
-```
-
-## Run API
-
-```bash
-uvicorn asx_trade_finder.api:app --reload
-```
-
-API endpoints:
-
-- `GET /health`
-- `GET /signals`
-- `GET /paper`
-- `POST /paper/reset`
-
-## Run frontend
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-## Paper account
-
-The paper account is deliberately separate from broker execution. It simulates:
-
-- cash
-- positions
-- market orders
-- fills
-- brokerage
-- slippage
-- stops and targets stored with positions
-- equity
-- open risk
-- kill-switch checks
-- save/load to JSON
-
-See `docs/PAPER_TRADING.md`.
-
-## Real-money gate
-
-Real trading should stay locked until all of this exists and passes:
-
-1. Real ASX data feed
-2. At least 10 years historical data
-3. Delisted stock handling
-4. Brokerage and slippage model
-5. Spread and liquidity model
-6. Walk-forward testing
-7. Paper trading with at least 50 trades or 3 months, whichever is longer
-8. Risk kill switch
-9. Manual review of all high-risk edge cases
-
-## Repo structure
-
-```text
-frontend/                  React dashboard
-src/asx_trade_finder/       Python backend package
-data/sample/                Sample watchlist and OHLCV files
-docs/                       System notes and build roadmap
-outputs/                    Generated scanner and backtest outputs
-paper_accounts/             Local paper-account JSON files, ignored by git
-tests/                      Unit tests
-```
-
-
-## Paper trading account
-
-The paper account now starts at **$5,000** by default. This can be changed later in `src/asx_trade_finder/config.py` or by constructing `PaperAccount(starting_cash=...)`.
-
-Paper trading tracks:
-
-- entries and exits
-- open and closed trades
-- win/loss result
-- gross and net P/L
-- R-multiple
-- brokerage and slippage
-- stop, target and exit reason
-- recent alerts
-- 60-second alert payloads for frontend popups
-
-Useful API endpoints:
-
-```bash
-GET  /paper
-GET  /paper/trades
-POST /paper/enter
-POST /paper/exit
-POST /paper/reset
-```
-
-The frontend should show a trade-entry popup for 60 seconds, or allow the user to close it manually.
-
-## v3 additions
-
-This version adds the planned UI and documentation for:
-
-- $5,000 paper account display
-- one-minute trade-entry popup alerts
-- sound alerts
-- voice readouts using browser SpeechSynthesis
-- read-this-setup button
-- expanded heatmap with sectors, market, commodities and signal flow
-- entry, stop, target and exit instructions read aloud
-
-The dashboard remains paper-testing only. Live trading stays locked until the system has real ASX data, backtest proof, paper-trading results and risk controls.
-
-## Cost model
-
-The paper account and backtest now include entry brokerage, exit brokerage, entry slippage and exit slippage. Results are reported after trading costs. Tax, monthly data fees, margin interest and FX are not deducted automatically because they depend on the user's broker/account setup. See `docs/COST_MODEL.md`.
-
-## v5 sound, voice and alert upgrade
-
-The frontend now has a visible **Enable sound & voice** control. This is required because browsers block audio until the user clicks a button. After enabling it, the dashboard can play alert tones and read paper-trade entry, exit, stop and target instructions aloud.
-
-The paper account still starts at **$5,000** and live trading remains locked.
-
-## v7 GitHub verification
-
-This version is coded and tested for GitHub upload. It includes:
-
-- backend unit tests
-- API tests
-- scanner sample run
-- backtest sample run
-- frontend production build
-- GitHub Actions CI workflow
-- Makefile commands
-- package-lock for repeatable frontend installs
-
-Verified locally:
-
-```text
-12 passed
-frontend npm run build: passed
-scanner sample run: passed
-backtest sample run: passed
-```
-
-See `docs/TESTING_AND_GITHUB.md`.
-
-## Render deployment fix
-
-If Render shows this error:
-
-```text
-npm error enoent Could not read package.json: Error: ENOENT: no such file or directory, open '/opt/render/project/src/package.json'
-```
-
-it means Render is building from the repository root while the frontend app is inside `frontend/`.
-
-This repo now includes a root `package.json`, so root builds work. For the cleanest Render frontend setup use:
-
-```text
-Root Directory: frontend
-Build Command: npm ci && npm run build
-Publish Directory: dist
-```
-
-For the API service use:
-
-```text
-Build Command: pip install -r requirements.txt && pip install -e .
-Start Command: uvicorn asx_trade_finder.api:app --host 0.0.0.0 --port $PORT
-```
-
-A `render.yaml` blueprint is also included.
-
-## Render deploy fix
-
-For Render, the safest frontend setup is:
-
-```text
-Root Directory: frontend
-Build Command: npm ci && npm run build
-Publish Directory: dist
-```
-
-If Render is set up as a Node Web Service from the repo root, use:
-
-```text
-Build Command: npm run build
-Start Command: npm start
-```
-
-The root `npm start` command now installs frontend dependencies if needed and starts Vite preview on `$PORT`, which fixes `vite: not found` errors.
-
-
-## Keepalive and auto refresh
-
-The app now includes a backend `/keepalive` endpoint, a GitHub Actions keepalive workflow, and frontend signal polling. See `docs/KEEPALIVE_AND_AUTO_REFRESH.md`.
-
-Render free services can still spin down or run out of free monthly hours. For true never-sleep hosting, use a paid Render instance.
-
-## Render deployment fix
-
-For Render Web Service frontend deployments, use:
-
-```bash
-npm run build
-npm start
-```
-
-The root `npm start` runs `server.mjs`, which binds to Render's `$PORT`. Do not use `vite preview` directly as the Render start command.
-
-## Real delayed ASX data mode
-
-For a real delayed data test on Render, set the backend environment variables:
-
-```bash
-ASX_DATA_PROVIDER=yfinance
-ASX_HISTORY_PERIOD=10y
-```
-
-The frontend must have:
-
-```bash
-VITE_API_BASE_URL=https://your-api-service.onrender.com
-VITE_AUTO_REFRESH_MS=60000
-VITE_DEMO_MODE=false
-```
-
-The dashboard will not show fake trades or fake profit. It will show no paper trades until trades are actually entered into the paper account.
-
-See `docs/REAL_DATA_AND_MARKET_CLOCK.md`.
-
-## v15 Hedge Fund Grade Upgrade
-
-This version adds an Institutional Risk Desk layer. It includes audit logging, data-quality checks, a pre-trade risk endpoint, and an institutional readiness endpoint. Live broker execution remains locked by design.
-
-New endpoints:
-
-```text
-GET  /institutional-readiness
-GET  /data-quality/{ticker}
-GET  /audit
-POST /risk/pretrade
-```
-
-See `docs/HEDGE_FUND_GRADE_UPGRADE.md`.
-
-
-## V18 visual verification
-After deployment, the frontend must show `AU-ASX-INSTITUTIONAL-DESK-V18` in the top-left build tag. The `/health` endpoint must return `build_id: AU-ASX-INSTITUTIONAL-DESK-V18`. If it does not, Render is serving an old build, wrong branch, or wrong service.
-
-## v22 auto paper trading and candlestick chart
-
-v22 adds a real candlestick chart view and an automatic paper-trading cycle. The paper trader enters READY/ARMED signals when the ASX market is open and exits when stop or target is hit by the latest scan price. It remains paper-only and broker execution is still locked.
-
-Useful settings:
-
-```text
-ASX_AUTO_PAPER_ENABLED=true
-ASX_AUTO_PAPER_MAX_ENTRIES_PER_SCAN=2
-ASX_SCAN_INTERVAL_SECONDS=60
-```
-
-## V23 chart and shared updates
-
-V23 adds a clearer chart legend, price/entry-area details in the priority queue, and documentation explaining what is shared through the hosted backend versus what stays local in each browser.
-
-Deploy check:
-
-```text
-/health should return AU-ASX-INSTITUTIONAL-DESK-V23
-```
+from __future__ import annotations
+
+from typing import Any, Dict, Iterable, List
+
+from .models import TradeSignal
+
+
+def institutional_readiness(provider: str, period: str, count: int, mode: str) -> Dict[str, Any]:
+    """Return a transparent readiness checklist.
+
+    This makes the app think more like a professional desk: data, model,
+    execution, risk, operations and audit are separate gates.
+    """
+    items = [
+        {"gate": "Market data", "status": "PASS" if provider in {"yfinance", "csv"} else "WARN", "note": f"Provider configured: {provider}. Licensed real-time feed still recommended."},
+        {"gate": "History depth", "status": "PASS" if str(period).lower() in {"10y", "max"} else "WARN", "note": f"Requested history period: {period}."},
+        {"gate": "Universe coverage", "status": "PASS" if count >= 40 else "WARN", "note": f"Current scan returned {count} candidates."},
+        {"gate": "Delisted securities", "status": "BLOCKED", "note": "Not available without a survivorship-bias-free data source."},
+        {"gate": "Announcements/events", "status": "PLANNED", "note": "ASX announcements and event-risk feed must be connected."},
+        {"gate": "Paper trading", "status": "PASS", "note": "$5,000 paper account is active. Broker execution locked."},
+        {"gate": "Audit trail", "status": "PASS", "note": "Scan, risk and paper events can be written to outputs/audit_log.jsonl."},
+        {"gate": "Live trading", "status": "LOCKED", "note": "Correctly disabled until backtest, forward test and paper account prove the edge."},
+    ]
+    score_map = {"PASS": 1.0, "WARN": 0.55, "PLANNED": 0.35, "BLOCKED": 0.0, "LOCKED": 0.6}
+    score = round(sum(score_map[i["status"]] for i in items) / len(items) * 100, 1)
+    return {"score": score, "mode": mode, "items": items, "live_trading_allowed": False}
+
+
+def signal_risk_book(signals: Iterable[Dict[str, Any]]) -> Dict[str, Any]:
+    rows = list(signals)
+    if not rows:
+        return {"count": 0, "ready": 0, "blocked": 0, "avg_score": 0, "top_sector": None, "sector_counts": {}}
+    sector_counts: Dict[str, int] = {}
+    ready = 0
+    blocked = 0
+    for r in rows:
+        sector = str(r.get("sector") or "Unknown")
+        sector_counts[sector] = sector_counts.get(sector, 0) + 1
+        status = str(r.get("status") or "").upper()
+        if status in {"READY", "ARMED"}:
+            ready += 1
+        if status == "BLOCKED":
+            blocked += 1
+    top_sector = max(sector_counts.items(), key=lambda x: x[1])[0] if sector_counts else None
+    return {
+        "count": len(rows),
+        "ready": ready,
+        "blocked": blocked,
+        "avg_score": round(sum(float(r.get("score") or 0) for r in rows) / len(rows), 2),
+        "top_sector": top_sector,
+        "sector_counts": sector_counts,
+    }
+
+
+def pre_trade_check(signal: TradeSignal, market_open: bool, account_equity: float, max_trade_value_pct: float = 0.25) -> Dict[str, Any]:
+    checks: List[Dict[str, Any]] = []
+
+    def add(name: str, passed: bool, note: str) -> None:
+        checks.append({"name": name, "passed": bool(passed), "note": note})
+
+    add("Market open", market_open, "Paper entries are blocked while ASX is closed." if not market_open else "ASX session is open.")
+    add("Signal score", signal.score >= 75, f"Score is {signal.score}.")
+    add("Status", signal.status.value in {"READY", "ARMED"}, f"Status is {signal.status.value}.")
+    add("Risk/reward", signal.risk_reward >= 2.0, f"R/R is {signal.risk_reward}.")
+    add("Stop valid", signal.stop < signal.entry, f"Entry {signal.entry}, stop {signal.stop}.")
+    add("Liquidity", signal.avg_daily_value >= 1_000_000, f"Avg daily value {signal.avg_daily_value:,.0f}.")
+    trade_value = max(signal.entry, 0) * max(int((account_equity * 0.005) // max(signal.entry - signal.stop, 0.01)), 0)
+    add("Concentration", trade_value <= account_equity * max_trade_value_pct, f"Estimated trade value {trade_value:,.2f}; limit {account_equity * max_trade_value_pct:,.2f}.")
+
+    approved = all(c["passed"] for c in checks)
+    return {"approved": approved, "checks": checks, "trade_value_estimate": round(trade_value, 2)}

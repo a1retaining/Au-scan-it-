@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -e .
+      - name: Run backend tests
+        run: pytest -q
+      - name: Run sample scanner
+        run: python -m asx_trade_finder.scanner --input data/sample/sample_watchlist.csv --prices data/sample/prices --output outputs/scanner_output.csv --json-output outputs/scanner_output.json
+      - name: Run sample backtest
+        run: python -m asx_trade_finder.backtest --input data/sample/sample_watchlist.csv --prices data/sample/prices --output outputs/backtest_results.csv
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend
+        working-directory: frontend
+        run: npm ci
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
