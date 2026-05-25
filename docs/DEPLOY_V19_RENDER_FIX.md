@@ -3,7 +3,7 @@
 The live `/health` page must return this build id:
 
 ```json
-"build_id": "AU-ASX-INSTITUTIONAL-DESK-V19"
+"build_id": "AU-ASX-INSTITUTIONAL-DESK-V26"
 ```
 
 If it does not, Render is still running old code.
@@ -54,6 +54,6 @@ ASX_SCAN_INTERVAL_SECONDS=60
 4. Click `Manual Deploy`.
 5. Choose `Clear build cache & deploy`.
 6. Open `https://YOUR-FRONTEND.onrender.com/health`.
-7. Confirm it shows `AU-ASX-INSTITUTIONAL-DESK-V19`.
+7. Confirm it shows `AU-ASX-INSTITUTIONAL-DESK-V26`.
 
 If `/health` does not show v19, Render is not using the new GitHub commit, branch, or root directory.

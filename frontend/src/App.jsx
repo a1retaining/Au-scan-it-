@@ -37,7 +37,7 @@ import './styles.css';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (typeof window !== 'undefined' ? window.location.origin : '');
 const AUTO_REFRESH_MS = Number(import.meta.env.VITE_AUTO_REFRESH_MS || 60000);
-const BUILD_ID = 'AU-ASX-INSTITUTIONAL-DESK-V23';
+const BUILD_ID = 'AU-ASX-INSTITUTIONAL-DESK-V26';
 
 const fallbackSignals = [
   { ticker: 'CBA', name: 'Commonwealth Bank', sector: 'Banks', score: 88, confidence: 82, status: 'REVIEW', setup: 'Pullback to value', price: 123.4, entry: 123.2, stop: 119.8, target: 132.7, rr: 2.79, volume: 1.3, change: 0.8, keyZone: '$122.40 to $124.10', why: ['Trend structure still positive', 'Banks sector holding up better than market', 'Price is near a defined buy zone'], risks: ['Market is closed, no entry now', 'Needs fresh liquidity check at open'] },

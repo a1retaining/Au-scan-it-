@@ -61,4 +61,4 @@ Fix: root `npm start` runs `node server.mjs`, which listens on `0.0.0.0:$PORT` a
 
 
 ## V18 visual verification
-After deployment, the frontend must show `AU-ASX-INSTITUTIONAL-DESK-V18` in the top-left build tag. The `/health` endpoint must return `build_id: AU-ASX-INSTITUTIONAL-DESK-V18`. If it does not, Render is serving an old build, wrong branch, or wrong service.
+After deployment, the frontend must show `AU-ASX-INSTITUTIONAL-DESK-V26` in the top-left build tag. The `/health` endpoint must return `build_id: AU-ASX-INSTITUTIONAL-DESK-V26`. If it does not, Render is serving an old build, wrong branch, or wrong service.
