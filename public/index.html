@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>TradingMint ASX Real</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <div>
+      <h1>TradingMint ASX Real</h1>
+      <p>Australia-only scanner. Public delayed data only. No fake options. Responsive v2 scoring.</p>
+    </div>
+    <button id="scanBtn">Run ASX Scan</button>
+  </header>
+
+  <section class="controls">
+    <label>Symbols, comma separated</label>
+    <input id="symbols" value="CBA,BHP,CSL,NAB,WBC,ANZ,MQG,WES,WOW,RIO,FMG,XRO" />
+    <label>Sector</label>
+    <select id="sector">
+      <option value="">Default symbols</option>
+      <option value="banks">Banks</option>
+      <option value="miners">Miners</option>
+      <option value="energy">Energy</option>
+      <option value="healthcare">Healthcare</option>
+      <option value="tech">Tech</option>
+      <option value="staples">Staples</option>
+      <option value="industrials">Industrials</option>
+    </select>
+    <button id="dayBtn">Run Day Scan</button>
+    <button id="discoverBtn">Discover</button>
+    <button id="backtestBtn">Backtest</button>
+  </section>
+
+  <section class="notice">
+    <strong>Data reality:</strong> this app uses public Yahoo Finance ASX chart data. Free ASX prices are normally delayed. The options route refuses to fabricate option chains.
+  </section>
+
+  <main>
+    <section class="panel wide">
+      <h2>Signals</h2>
+      <div id="meta"></div>
+      <table>
+        <thead>
+          <tr>
+            <th>Symbol</th><th>Score</th><th>Decision</th><th>Price</th><th>5D</th><th>20D</th><th>20D Range</th><th>Buy Zone</th><th>Stop</th><th>Target</th><th>RR</th><th>Liquidity</th>
+          </tr>
+        </thead>
+        <tbody id="signals"></tbody>
+      </table>
+    </section>
+
+    <section class="panel">
+      <h2>Selected</h2>
+      <pre id="selected">Click a row.</pre>
+      <button id="optionsBtn">Check ASX options availability</button>
+      <pre id="optionsOut"></pre>
+    </section>
+  </main>
+
+  <section class="panel">
+    <h2>Backtest / Errors</h2>
+    <pre id="output"></pre>
+  </section>
+
+  <script src="app.js"></script>
+</body>
+</html>

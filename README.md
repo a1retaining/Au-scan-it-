@@ -1,334 +1,93 @@
-# Traders Success Formula: ASX
+# TradingMint ASX Real v2 Responsive Score
 
-## Current deploy build
+Australia-only ASX scanner built from your US backend idea, but cleaned so it does not fake unavailable data.
 
-Expected frontend health build id: `AU-ASX-INSTITUTIONAL-DESK-V26`.
+## What it does
 
-Check after deploy: `https://YOUR-FRONTEND.onrender.com/health`.
+- Scans ASX shares only.
+- Uses Yahoo Finance public chart data with `.AX` symbols, for example `CBA.AX`.
+- Normalises `CBA` to `CBA.AX` automatically.
+- Uses AUD, Sydney market hours, and ASX sector lists.
+- Provides swing scan, day scan, discovery scan, historical backtest, and paper-trade tracking.
+- Refuses to fabricate ASX option chain data.
 
+## Important data reality
 
-A GitHub-ready Australian trading system project with:
+This is not a licensed live ASX data terminal. ASX delayed data is normally delayed for free/public users. ASX says delayed data is available with 20-minute delay for cash equities and 10-minute delay for derivatives. This app clearly labels public data and does not claim true live exchange data.
 
-- ASX signal scanner
-- scoring engine
-- risk manager
-- paper trading account
-- simple backtest runner
-- FastAPI backend
-- React/Vite frontend dashboard
-- sample ASX-style data
-- tests
-
-This is a research and paper-trading project. It is **not financial advice** and it must not be connected to real-money execution until the system has passed historical testing, walk-forward testing, paper trading, slippage modelling and risk review.
-
-## What the user sees
-
-The front end is a dark command-centre dashboard:
-
-- market score
-- best sector
-- A-grade setups
-- paper account equity
-- clickable stock signals
-- chart panel with entry, stop and target
-- plain-English signal explanations
-- heatmap
-- backtest charts
-- paper account section
-- live-money locked status
-
-## Install backend
+## Install
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-pip install -e .
-pytest
-```
-
-## Run scanner
-
-```bash
-python -m asx_trade_finder.scanner \
-  --input data/sample/sample_watchlist.csv \
-  --prices data/sample/prices \
-  --output outputs/scanner_output.csv
-```
-
-## Run backtest
-
-```bash
-python -m asx_trade_finder.backtest \
-  --input data/sample/sample_watchlist.csv \
-  --prices data/sample/prices \
-  --output outputs/backtest_results.csv
-```
-
-## Run API
-
-```bash
-uvicorn asx_trade_finder.api:app --reload
-```
-
-API endpoints:
-
-- `GET /health`
-- `GET /signals`
-- `GET /paper`
-- `POST /paper/reset`
-
-## Run frontend
-
-```bash
-cd frontend
 npm install
-npm run dev
-```
-
-## Paper account
-
-The paper account is deliberately separate from broker execution. It simulates:
-
-- cash
-- positions
-- market orders
-- fills
-- brokerage
-- slippage
-- stops and targets stored with positions
-- equity
-- open risk
-- kill-switch checks
-- save/load to JSON
-
-See `docs/PAPER_TRADING.md`.
-
-## Real-money gate
-
-Real trading should stay locked until all of this exists and passes:
-
-1. Real ASX data feed
-2. At least 10 years historical data
-3. Delisted stock handling
-4. Brokerage and slippage model
-5. Spread and liquidity model
-6. Walk-forward testing
-7. Paper trading with at least 50 trades or 3 months, whichever is longer
-8. Risk kill switch
-9. Manual review of all high-risk edge cases
-
-## Repo structure
-
-```text
-frontend/                  React dashboard
-src/asx_trade_finder/       Python backend package
-data/sample/                Sample watchlist and OHLCV files
-docs/                       System notes and build roadmap
-outputs/                    Generated scanner and backtest outputs
-paper_accounts/             Local paper-account JSON files, ignored by git
-tests/                      Unit tests
-```
-
-
-## Paper trading account
-
-The paper account now starts at **$5,000** by default. This can be changed later in `src/asx_trade_finder/config.py` or by constructing `PaperAccount(starting_cash=...)`.
-
-Paper trading tracks:
-
-- entries and exits
-- open and closed trades
-- win/loss result
-- gross and net P/L
-- R-multiple
-- brokerage and slippage
-- stop, target and exit reason
-- recent alerts
-- 60-second alert payloads for frontend popups
-
-Useful API endpoints:
-
-```bash
-GET  /paper
-GET  /paper/trades
-POST /paper/enter
-POST /paper/exit
-POST /paper/reset
-```
-
-The frontend should show a trade-entry popup for 60 seconds, or allow the user to close it manually.
-
-## v3 additions
-
-This version adds the planned UI and documentation for:
-
-- $5,000 paper account display
-- one-minute trade-entry popup alerts
-- sound alerts
-- voice readouts using browser SpeechSynthesis
-- read-this-setup button
-- expanded heatmap with sectors, market, commodities and signal flow
-- entry, stop, target and exit instructions read aloud
-
-The dashboard remains paper-testing only. Live trading stays locked until the system has real ASX data, backtest proof, paper-trading results and risk controls.
-
-## Cost model
-
-The paper account and backtest now include entry brokerage, exit brokerage, entry slippage and exit slippage. Results are reported after trading costs. Tax, monthly data fees, margin interest and FX are not deducted automatically because they depend on the user's broker/account setup. See `docs/COST_MODEL.md`.
-
-## v5 sound, voice and alert upgrade
-
-The frontend now has a visible **Enable sound & voice** control. This is required because browsers block audio until the user clicks a button. After enabling it, the dashboard can play alert tones and read paper-trade entry, exit, stop and target instructions aloud.
-
-The paper account still starts at **$5,000** and live trading remains locked.
-
-## v7 GitHub verification
-
-This version is coded and tested for GitHub upload. It includes:
-
-- backend unit tests
-- API tests
-- scanner sample run
-- backtest sample run
-- frontend production build
-- GitHub Actions CI workflow
-- Makefile commands
-- package-lock for repeatable frontend installs
-
-Verified locally:
-
-```text
-12 passed
-frontend npm run build: passed
-scanner sample run: passed
-backtest sample run: passed
-```
-
-See `docs/TESTING_AND_GITHUB.md`.
-
-## Render deployment fix
-
-If Render shows this error:
-
-```text
-npm error enoent Could not read package.json: Error: ENOENT: no such file or directory, open '/opt/render/project/src/package.json'
-```
-
-it means Render is building from the repository root while the frontend app is inside `frontend/`.
-
-This repo now includes a root `package.json`, so root builds work. For the cleanest Render frontend setup use:
-
-```text
-Root Directory: frontend
-Build Command: npm ci && npm run build
-Publish Directory: dist
-```
-
-For the API service use:
-
-```text
-Build Command: pip install -r requirements.txt && pip install -e .
-Start Command: uvicorn asx_trade_finder.api:app --host 0.0.0.0 --port $PORT
-```
-
-A `render.yaml` blueprint is also included.
-
-## Render deploy fix
-
-For Render, the safest frontend setup is:
-
-```text
-Root Directory: frontend
-Build Command: npm ci && npm run build
-Publish Directory: dist
-```
-
-If Render is set up as a Node Web Service from the repo root, use:
-
-```text
-Build Command: npm run build
-Start Command: npm start
-```
-
-The root `npm start` command now installs frontend dependencies if needed and starts Vite preview on `$PORT`, which fixes `vite: not found` errors.
-
-
-## Keepalive and auto refresh
-
-The app now includes a backend `/keepalive` endpoint, a GitHub Actions keepalive workflow, and frontend signal polling. See `docs/KEEPALIVE_AND_AUTO_REFRESH.md`.
-
-Render free services can still spin down or run out of free monthly hours. For true never-sleep hosting, use a paid Render instance.
-
-## Render deployment fix
-
-For Render Web Service frontend deployments, use:
-
-```bash
-npm run build
 npm start
 ```
 
-The root `npm start` runs `server.mjs`, which binds to Render's `$PORT`. Do not use `vite preview` directly as the Render start command.
+Open:
 
-## Real delayed ASX data mode
+```txt
+http://localhost:10000
+```
 
-For a real delayed data test on Render, set the backend environment variables:
+## Main API routes
+
+```txt
+GET  /api/health
+GET  /api/scan?symbols=CBA,BHP,CSL
+GET  /api/scan?sector=banks
+GET  /api/discover?scanLimit=80&limit=30
+GET  /api/day-scan?symbols=CBA,BHP,CSL
+GET  /api/bars?symbol=CBA&range=1y&interval=1d
+GET  /api/backtest?symbols=CBA,BHP,CSL&years=5&account=5000&risk=50
+GET  /api/options?symbol=CBA
+POST /api/paper/open
+POST /api/paper/close
+GET  /api/paper/trades
+GET  /api/paper/stats
+GET  /api/sectors
+GET  /api/universe
+```
+
+## Options route
+
+`/api/options` intentionally returns `not_available_from_current_public_data_source` unless you connect a real ASX options-chain provider.
+
+That is by design. It avoids fake delta, fake IV, fake open interest, and fake bid/ask data.
+
+## Paper trade example
 
 ```bash
-ASX_DATA_PROVIDER=yfinance
-ASX_HISTORY_PERIOD=10y
+curl -X POST http://localhost:10000/api/paper/open \
+  -H "Content-Type: application/json" \
+  -d '{"symbol":"CBA","side":"long","entry":180,"shares":5,"stop":174,"target":192,"setup":"ASX Pullback"}'
 ```
 
-The frontend must have:
+## What to connect later for real options
 
-```bash
-VITE_API_BASE_URL=https://your-api-service.onrender.com
-VITE_AUTO_REFRESH_MS=60000
-VITE_DEMO_MODE=false
-```
+To add real ASX options, connect one of:
 
-The dashboard will not show fake trades or fake profit. It will show no paper trades until trades are actually entered into the paper account.
+- licensed ASX derivatives data
+- broker API with ASX exchange-traded options chain
+- verified options data vendor
 
-See `docs/REAL_DATA_AND_MARKET_CLOCK.md`.
-
-## v15 Hedge Fund Grade Upgrade
-
-This version adds an Institutional Risk Desk layer. It includes audit logging, data-quality checks, a pre-trade risk endpoint, and an institutional readiness endpoint. Live broker execution remains locked by design.
-
-New endpoints:
-
-```text
-GET  /institutional-readiness
-GET  /data-quality/{ticker}
-GET  /audit
-POST /risk/pretrade
-```
-
-See `docs/HEDGE_FUND_GRADE_UPGRADE.md`.
+Do not add an options picker until the chain includes real bid, ask, expiry, strike, volume, open interest, and ideally Greeks or enough fields to compute them.
 
 
-## V18 visual verification
-After deployment, the frontend must show `AU-ASX-INSTITUTIONAL-DESK-V26` in the top-left build tag. The `/health` endpoint must return `build_id: AU-ASX-INSTITUTIONAL-DESK-V26`. If it does not, Render is serving an old build, wrong branch, or wrong service.
+## v2 scoring fix
 
-## v22 auto paper trading and candlestick chart
+This version fixes the issue where the chart could change for days or weeks while the score stayed nearly the same.
 
-v22 adds a real candlestick chart view and an automatic paper-trading cycle. The paper trader enters READY/ARMED signals when the ASX market is open and exits when stop or target is hit by the latest scan price. It remains paper-only and broker execution is still locked.
+The original score was too slow because it heavily rewarded long-term conditions such as price above EMA20, EMA50, EMA200, broad RSI bands, and liquidity. Those can remain unchanged for weeks.
 
-Useful settings:
+The v2 score now includes more responsive inputs:
 
-```text
-ASX_AUTO_PAPER_ENABLED=true
-ASX_AUTO_PAPER_MAX_ENTRIES_PER_SCAN=2
-ASX_SCAN_INTERVAL_SECONDS=60
-```
+- 5 day momentum
+- 10 day momentum
+- 20 day momentum
+- position inside the 20 day high-low range
+- latest candle direction
+- volume confirmation
+- short-term EMA acceleration
+- distance from EMA20 warning
+- scoreParts breakdown so you can see exactly why the score changed
 
-## V23 chart and shared updates
-
-V23 adds a clearer chart legend, price/entry-area details in the priority queue, and documentation explaining what is shared through the hosted backend versus what stays local in each browser.
-
-Deploy check:
-
-```text
-/health should return AU-ASX-INSTITUTIONAL-DESK-V26
-```
+The app still uses real public ASX chart data only. It does not fabricate live prices or ASX options chains.
