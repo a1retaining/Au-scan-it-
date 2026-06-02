@@ -52,14 +52,14 @@ function speak(text) {
 
 function scoreClass(score) {
   score = Number(score || 0);
-  if (score >= 80) return "good";
+  if (score >= 78) return "good";
   if (score >= 60) return "mid";
   return "bad";
 }
 
 function decisionClass(decision) {
   const d = String(decision || "");
-  if (d.includes("AUTO") || d.includes("ENTER") || d.includes("READY")) return "enter";
+  if (d.includes("AUTO") || d.includes("READY") || d.includes("ENTER")) return "enter";
   if (d.includes("BLOCK") || d.includes("AVOID")) return "block";
   return "";
 }
@@ -71,6 +71,7 @@ function shortSymbol(symbol) {
 function trendWord(s) {
   const c5 = Number(s.change5dPct || 0);
   const c20 = Number(s.change20dPct || 0);
+
   if (c5 > 1 && c20 > 2) return "BULLISH";
   if (c5 < -1 && c20 < -2) return "BEARISH";
   return "NEUTRAL";
@@ -80,10 +81,12 @@ function qualityRank(s) {
   const score = Number(s.score || 0);
   const rr = Number(s.riskReward || 0);
   const liq = Number(s.avgDollarVolume20 || 0);
-  let q = score + Math.min(14, rr * 4);
+
+  let q = score + Math.min(12, rr * 3);
 
   if (liq >= 20000000) q += 5;
-  if (String(s.decision || "").includes("AUTO")) q += 10;
+  if (s.paperRules && s.paperRules.allowed) q += 12;
+  if (String(s.decision || "").includes("AUTO")) q += 7;
   if ((s.warnings || []).length) q -= Math.min(10, s.warnings.length * 2);
 
   return Math.round(q);
@@ -91,12 +94,14 @@ function qualityRank(s) {
 
 function signalSector(symbol) {
   const s = shortSymbol(symbol);
+
   if (["CBA", "NAB", "WBC", "ANZ", "MQG", "BEN", "BOQ"].includes(s)) return "Banks";
   if (["BHP", "RIO", "FMG", "S32", "NST", "NEM", "MIN", "IGO", "LYC", "PLS"].includes(s)) return "Materials";
   if (["WDS", "STO", "ORG", "BPT", "VEA", "WHC", "YAL"].includes(s)) return "Energy";
   if (["CSL", "RMD", "SHL", "COH", "FPH", "PME", "RHC"].includes(s)) return "Healthcare";
   if (["XRO", "WTC", "ALU", "NXT", "SEK", "CPU", "ZIP"].includes(s)) return "Technology";
   if (["WOW", "COL", "WES", "A2M", "TWE", "EDV"].includes(s)) return "Staples";
+
   return "Other";
 }
 
@@ -151,35 +156,37 @@ function renderSnapshot(signals) {
 
   if ($("tickerbar")) {
     $("tickerbar").textContent =
-      `ASX NEAR-LIVE PUBLIC CHART DATA • ${tape || "NO SCAN YET"} • AUTO PAPER RULES • NO FAKE OPTIONS`;
+      `ASX NEAR-LIVE PUBLIC CHART MODE • ${tape || "NO SCAN YET"} • NO FAKE OPTION CHAINS • AUTO PAPER ONLY`;
   }
 }
 
 function renderSignals(data) {
   lastSignals = (data.signals || []).slice().sort((a, b) => qualityRank(b) - qualityRank(a));
 
-  const autoReady = lastSignals.filter((s) => String(s.decision || "").includes("AUTO")).length;
+  const aGrades = lastSignals.filter((s) => Number(s.score || 0) >= 78).length;
 
   if ($("marketRegime")) $("marketRegime").textContent = String(data.marketRegime || data.market || "ASX").toUpperCase();
-  if ($("regimeCard")) $("regimeCard").textContent = String(data.marketRegime || data.market || "ASX").toUpperCase();
-  if ($("regimeSub")) $("regimeSub").textContent = data.marketSource ? `Source: ${data.marketSource}` : "Sydney market";
   if ($("trendStat")) $("trendStat").textContent = lastSignals.length && lastSignals[0] ? trendWord(lastSignals[0]) : "SCANNING";
   if ($("countStat")) $("countStat").textContent = String(data.count ?? lastSignals.length);
-  if ($("aGradeStat")) $("aGradeStat").textContent = String(autoReady);
-  if ($("confidenceStat")) $("confidenceStat").textContent = autoReady >= 2 ? "ACTIVE" : autoReady === 1 ? "READY" : "WAITING";
+  if ($("aGradeStat")) $("aGradeStat").textContent = String(aGrades);
+  if ($("confidenceStat")) $("confidenceStat").textContent = aGrades >= 3 ? "HIGH" : aGrades >= 1 ? "MEDIUM" : "LOW";
   if ($("updatedStat")) $("updatedStat").textContent = data.updatedAt ? new Date(data.updatedAt).toLocaleTimeString() : "Updated";
+  if ($("regimeSub")) $("regimeSub").textContent = data.marketSource ? `Source: ${data.marketSource}` : "Rule-gated paper scan";
 
   if ($("meta")) {
     $("meta").textContent =
-      `${data.mode || "scan"} | ${lastSignals.length} returned | Auto-ready: ${autoReady} | Public ASX chart feed`;
+      `${data.mode || "scan"} | ${lastSignals.length} returned | Auto-paper candidates: ${lastSignals.filter((s) => s.paperRules && s.paperRules.allowed).length}`;
   }
 
-  if ($("signals")) {
-    $("signals").innerHTML =
+  const tbody = $("signals");
+
+  if (tbody) {
+    tbody.innerHTML =
       lastSignals
         .map((s, idx) => {
           const selected = selectedSignal && selectedSignal.symbol === s.symbol ? "selected" : "";
           const trend = trendWord(s);
+          const allowed = s.paperRules && s.paperRules.allowed ? "YES" : "NO";
 
           return `<tr class="${selected}" data-symbol="${s.symbol}">
             <td>${idx + 1}</td>
@@ -190,11 +197,11 @@ function renderSignals(data) {
             <td>${trend}</td>
             <td>${money(s.price)}</td>
             <td>${money(s.buyZoneLow)} - ${money(s.buyZoneHigh)}</td>
-            <td><span class="pill ${decisionClass(s.decision)}">${s.decision || "WATCH"}</span></td>
+            <td><span class="pill ${allowed === "YES" ? "enter" : decisionClass(s.decision)}">${allowed === "YES" ? "AUTO READY" : s.decision || "WATCH"}</span></td>
           </tr>`;
         })
         .join("") ||
-      `<tr><td colspan="9">No signals returned. The backend will show real fetch errors rather than fake data.</td></tr>`;
+      `<tr><td colspan="9">No signals returned. If this is during a Yahoo outage, the backend will show the real error instead of fake data.</td></tr>`;
 
     document.querySelectorAll("#signals tr[data-symbol]").forEach((row) =>
       row.addEventListener("click", () => selectSignal(row.dataset.symbol))
@@ -203,7 +210,6 @@ function renderSignals(data) {
 
   renderHeatmap(lastSignals);
   renderSnapshot(lastSignals);
-  loadPaper();
 
   if (!selectedSignal && lastSignals[0]) {
     selectSignal(lastSignals[0].symbol, true);
@@ -229,10 +235,28 @@ function selectSignal(symbol, quiet = false) {
   }
 }
 
+function renderRuleChecks(s) {
+  const checks = s && s.paperRules && Array.isArray(s.paperRules.checks) ? s.paperRules.checks : [];
+
+  if (!checks.length) {
+    return `<div class="snapshot-item"><strong>Rule gate</strong><span>No rule data</span></div>`;
+  }
+
+  return checks
+    .map(
+      (c) =>
+        `<div class="snapshot-item">
+          <strong>${c.name}</strong>
+          <span>${c.pass ? "PASS" : "BLOCK"} | ${c.actual} / ${c.required}</span>
+        </div>`
+    )
+    .join("");
+}
+
 function renderDetail(s) {
   if (!s) {
     $("detail").innerHTML =
-      `<h3>TRADE DECISION STREAM</h3><p class="muted">Select a signal to inspect entry, stop, target, score breakdown and risk notes.</p>`;
+      `<h3>TRADE DECISION STREAM</h3><p class="muted">Select a signal to inspect entry, stop, target, score breakdown and rule gate.</p>`;
     return;
   }
 
@@ -248,16 +272,10 @@ function renderDetail(s) {
     .map((p) => `<div class="snapshot-item"><strong>${p.name}</strong><span>${p.points}</span></div>`)
     .join("");
 
-  const checks = s.paperRules && s.paperRules.checks
-    ? s.paperRules.checks.map((c) =>
-        `<div class="snapshot-item"><strong>${c.name}</strong><span>${c.pass ? "PASS" : "BLOCK"} | ${c.actual} / ${c.required}</span></div>`
-      ).join("")
-    : `<div class="snapshot-item"><strong>No rule data</strong><span>Run scan</span></div>`;
-
-  const gate = s.paperRules && s.paperRules.allowed ? "RULES PASS" : "RULES BLOCK";
+  const gate = s.paperRules && s.paperRules.allowed ? "AUTO PAPER READY" : "RULES BLOCK";
 
   $("detail").innerHTML = `<h3>TRADE DECISION STREAM</h3>
-    <div class="detail-title">${shortSymbol(s.symbol)} <small>${s.setup || "ASX setup"} | ${s.decision || "WATCH"} | ${gate}</small></div>
+    <div class="detail-title">${shortSymbol(s.symbol)} <small>${s.setup || "ASX setup"} | ${gate}</small></div>
 
     <div class="metric-row">
       <div class="small-metric"><span>Entry area</span><strong>${money(s.buyZoneLow)} - ${money(s.buyZoneHigh)}</strong></div>
@@ -269,14 +287,14 @@ function renderDetail(s) {
     </div>
 
     <div class="button-row">
-      <button class="secondary" onclick="openPaperTrade('${s.symbol}')">Manual Paper Entry</button>
+      <button class="secondary" onclick="openPaperTrade('${s.symbol}')">Manual Rule Paper Entry</button>
       <button class="secondary" onclick="runAutoPaper()">Run Auto Paper</button>
-      <button class="secondary" onclick="checkOptions('${s.symbol}')">Check Options Reality</button>
       <button class="secondary" onclick="document.getElementById('chartPanel').scrollIntoView({behavior:'smooth'})">View Chart</button>
+      <button class="secondary" onclick="checkOptions('${s.symbol}')">Check Options Reality</button>
     </div>
 
-    <h4>Paper Rule Gate</h4>
-    <div class="snapshot-list">${checks}</div>
+    <h4>Paper Trade Rule Gate</h4>
+    <div class="snapshot-list">${renderRuleChecks(s)}</div>
 
     <h4>Why it ranked</h4>
     <ul class="reason-list">${reasons || "<li>No reasons returned.</li>"}</ul>
@@ -310,7 +328,9 @@ async function loadChart(symbol) {
     drawChart(selected, data.bars || selected.bars || [], data.source || selected.source || "public data");
   } catch (e) {
     drawChart(selected, selected.bars || [], selected.source || "public data");
-    if ($("chartMeta")) $("chartMeta").textContent = `${shortSymbol(selected.symbol)} | fallback chart | ${e.message}`;
+    if ($("chartMeta")) {
+      $("chartMeta").textContent = `${shortSymbol(selected.symbol)} | fallback chart | ${e.message}`;
+    }
   }
 }
 
@@ -425,12 +445,13 @@ function drawChart(s, incomingBars, sourceLabel) {
   line(s.target1, "#34f59b", "Target");
 
   const trades = getTradesForSymbol(s.symbol);
-
   trades.forEach((t) => {
     line(t.entry, "#42e8ff", "Paper entry");
     line(t.stop, "#ff5d5d", "Paper stop");
     line(t.target, "#34f59b", "Paper target");
-    if (Number.isFinite(Number(t.exit))) line(t.exit, "#ffc857", "Paper exit");
+    if (Number.isFinite(Number(t.exit))) {
+      line(t.exit, "#ffc857", "Paper exit");
+    }
   });
 
   ctx.fillStyle = "#8fa4bc";
@@ -443,13 +464,13 @@ function drawChart(s, incomingBars, sourceLabel) {
 
   if ($("chartMeta")) {
     $("chartMeta").textContent =
-      `${shortSymbol(s.symbol)} | ${bars.length} bars | ${currentRange} / ${currentInterval} | Paper levels shown`;
+      `${shortSymbol(s.symbol)} | ${bars.length} bars | ${currentRange} / ${currentInterval} | Entries, stops, targets and paper trades`;
   }
 }
 
 async function runScan(mode = "scan") {
   try {
-    toast("Running ASX scan...");
+    toast("Running real ASX scan...");
 
     const sector = $("sector") ? $("sector").value : "";
     const symbols = $("symbols") ? $("symbols").value : "";
@@ -474,7 +495,7 @@ async function runScan(mode = "scan") {
 
 async function runAutoPaper() {
   try {
-    toast("Running automatic paper trader...");
+    toast("Running auto paper rules...");
 
     const sector = $("sector") ? $("sector").value : "";
     const symbols = $("symbols") ? $("symbols").value : "";
@@ -490,27 +511,40 @@ async function runAutoPaper() {
       })
     });
 
-    const data = await response.json();
+    const json = await response.json();
 
-    if (!response.ok || data.ok === false) {
-      throw new Error(data.error || "Auto paper failed");
+    if (!response.ok || json.ok === false) {
+      throw new Error(json.error || "Auto paper failed");
     }
 
     if ($("autoPaperOutput")) {
-      $("autoPaperOutput").textContent = JSON.stringify(data, null, 2);
+      $("autoPaperOutput").innerHTML = `<div class="snapshot-list">
+        <div class="snapshot-item"><strong>Opened</strong><span>${json.openedCount || 0}</span></div>
+        <div class="snapshot-item"><strong>Blocked</strong><span>${json.blockedCount || 0}</span></div>
+        <div class="snapshot-item"><strong>Rules</strong><span>Score 80+ / R:R 1.8+</span></div>
+      </div>
+      <div class="paper-trades">
+        ${
+          (json.opened || [])
+            .map(
+              (t) => `<div class="paper-trade">
+                <div class="paper-trade-head"><strong>${shortSymbol(t.symbol)} AUTO OPENED</strong><small>${t.setup}</small></div>
+                <small>Entry ${money(t.entry)} | Stop ${money(t.stop)} | Target ${money(t.target)} | R:R ${num(t.riskReward)}</small>
+              </div>`
+            )
+            .join("") || `<div class="paper-trade"><strong>No trades opened</strong><small>No setup passed all auto-paper rules.</small></div>`
+        }
+      </div>`;
     }
+
+    toast(`Auto paper complete. Opened ${json.openedCount || 0}.`);
 
     await loadPaper();
-
-    if (selectedSignal) {
-      await loadChart(selectedSignal.symbol);
-    }
-
-    toast(`${data.openedCount || 0} auto paper trades opened`);
+    await runScan("scan");
   } catch (e) {
     toast(e.message);
     if ($("autoPaperOutput")) {
-      $("autoPaperOutput").textContent = e.message;
+      $("autoPaperOutput").innerHTML = `<p class="muted">${e.message}</p>`;
     }
   }
 }
@@ -518,13 +552,6 @@ async function runAutoPaper() {
 async function openPaperTrade(symbol) {
   const s = lastSignals.find((x) => x.symbol === symbol);
   if (!s) return;
-
-  if (!s.paperRules || !s.paperRules.allowed) {
-    toast("Manual paper trade blocked: this signal does not pass the rule gate.");
-    return;
-  }
-
-  const shares = Math.max(1, Math.floor(500 / Math.max(Number(s.price || 1), 1)));
 
   try {
     const response = await fetch("/api/paper/open", {
@@ -534,7 +561,7 @@ async function openPaperTrade(symbol) {
         symbol,
         side: "long",
         entry: s.price,
-        shares,
+        shares: Math.max(1, Math.floor(500 / Math.max(Number(s.price || 1), 1))),
         stop: s.stopLoss,
         target: s.target1,
         setup: s.setup,
@@ -597,10 +624,10 @@ async function loadPaper() {
               (t) => `<div class="paper-trade">
                 <div class="paper-trade-head">
                   <strong>${shortSymbol(t.symbol)} ${String(t.status).toUpperCase()}</strong>
-                  <small>${t.setup || "manual"} | R:R ${num(t.riskReward)}</small>
+                  <small>${t.setup || "manual"}</small>
                 </div>
 
-                <small>Entry ${money(t.entry)} | Shares ${t.shares} | Stop ${money(t.stop)} | Target ${money(t.target)}</small>
+                <small>Entry ${money(t.entry)} | Shares ${t.shares} | Stop ${money(t.stop)} | Target ${money(t.target)} | R:R ${num(t.riskReward)}</small>
 
                 ${
                   t.status === "open"
@@ -613,9 +640,13 @@ async function loadPaper() {
               </div>`
             )
             .join("") ||
-          `<div class="paper-trade"><strong>No paper trades yet</strong><small>Click Auto Paper Trade or Manual Paper Entry on an approved signal.</small></div>`
+          `<div class="paper-trade"><strong>No paper trades yet</strong><small>Run Auto Paper or use a rule-gated manual paper entry.</small></div>`
         }
       </div>`;
+    }
+
+    if (selectedSignal) {
+      drawChart(selectedSignal, selectedSignal.bars || [], selectedSignal.source || "public data");
     }
   } catch (e) {
     if ($("paperStats")) $("paperStats").innerHTML = `<p class="muted">${e.message}</p>`;
@@ -646,7 +677,9 @@ async function closePaperTrade(id) {
     toast("Paper trade closed");
     await loadPaper();
 
-    if (selectedSignal) await loadChart(selectedSignal.symbol);
+    if (selectedSignal) {
+      await loadChart(selectedSignal.symbol);
+    }
   } catch (e) {
     toast(e.message);
   }
@@ -690,7 +723,9 @@ function setupTimeframeButtons() {
       currentRange = btn.dataset.range || "1y";
       currentInterval = btn.dataset.interval || "1d";
 
-      if (selectedSignal) await loadChart(selectedSignal.symbol);
+      if (selectedSignal) {
+        await loadChart(selectedSignal.symbol);
+      }
     });
   });
 }
@@ -704,22 +739,25 @@ function setupNav() {
       const mode = btn.dataset.mode || "dashboard";
 
       const map = {
-        dashboard: "dashboardPanel",
+        dashboard: "chartPanel",
         chart: "chartPanel",
         scan: "scanPanel",
         paper: "paperPanel",
-        settings: "settingsPanel",
         journal: "paperPanel",
         performance: "paperPanel",
+        settings: "settingsPanel",
         sectors: "sectorsPanel",
-        backtest: "backtestPanel",
+        backtest: "healthPanel",
         health: "healthPanel"
       };
 
-      const id = map[mode] || "scanPanel";
+      const id = map[mode] || "chartPanel";
       const el = $(id);
 
-      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+
       if (["paper", "journal", "performance"].includes(mode)) loadPaper();
       if (mode === "health") loadHealth();
     })
@@ -732,16 +770,14 @@ window.closePaperTrade = closePaperTrade;
 window.runAutoPaper = runAutoPaper;
 
 if ($("scanBtn")) $("scanBtn").addEventListener("click", () => runScan("scan"));
-if ($("scanBtnSide")) $("scanBtnSide").addEventListener("click", () => runScan("scan"));
 if ($("refreshBtn")) $("refreshBtn").addEventListener("click", () => runScan("scan"));
 if ($("discoverBtn")) $("discoverBtn").addEventListener("click", () => runScan("discover"));
 if ($("dayBtn")) $("dayBtn").addEventListener("click", () => runScan("day"));
 if ($("paperBtn")) $("paperBtn").addEventListener("click", loadPaper);
 if ($("runBacktest")) $("runBacktest").addEventListener("click", runBacktest);
-
 if ($("autoPaperBtn")) $("autoPaperBtn").addEventListener("click", runAutoPaper);
-if ($("autoPaperBtnSide")) $("autoPaperBtnSide").addEventListener("click", runAutoPaper);
-if ($("autoPaperMiniBtn")) $("autoPaperMiniBtn").addEventListener("click", runAutoPaper);
+if ($("topAutoPaperBtn")) $("topAutoPaperBtn").addEventListener("click", runAutoPaper);
+if ($("paperAutoPanelBtn")) $("paperAutoPanelBtn").addEventListener("click", runAutoPaper);
 
 if ($("clearSelect")) {
   $("clearSelect").addEventListener("click", () => {
