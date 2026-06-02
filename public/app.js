@@ -11,7 +11,7 @@ function endpoint(path, params = {}) {
 }
 
 async function getJson(url) {
-  const response = await fetch(url, { cache: "no-store" });
+  const response = await fetch(url);
   const json = await response.json();
   if (!response.ok) throw new Error(json.error || "Request failed");
   return json;
@@ -25,12 +25,9 @@ function renderSignals(data) {
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${s.symbol}</td>
-      <td><strong>${s.score}</strong></td>
+      <td>${s.score}</td>
       <td>${s.decision}</td>
       <td>${s.price ?? ""}</td>
-      <td>${s.change5dPct ?? ""}%</td>
-      <td>${s.change20dPct ?? ""}%</td>
-      <td>${s.rangePosition20 ?? ""}%</td>
       <td>${s.buyZoneLow ?? ""} - ${s.buyZoneHigh ?? ""}</td>
       <td>${s.stopLoss ?? ""}</td>
       <td>${s.target1 ?? s.dayTarget ?? ""}</td>
