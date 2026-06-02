@@ -9,7 +9,7 @@
 
 <body>
   <div class="tickerbar" id="tickerbar">
-    ASX NEAR-LIVE PUBLIC CHART DATA • NO FAKE OPTION CHAINS • AUTO PAPER RULES • AUD
+    ASX NEAR-LIVE PUBLIC CHART MODE • NO FAKE OPTION CHAINS • AUTO PAPER ONLY • AUD
   </div>
 
   <div class="app-shell">
@@ -28,81 +28,76 @@
         <button class="nav active" data-mode="dashboard">▥ Dashboard</button>
         <button class="nav" data-mode="chart">▤ Chart</button>
         <button class="nav" data-mode="scan">⌕ Live scanner</button>
-        <button class="nav" data-mode="paper">⚙ Paper trader</button>
-        <button class="nav" data-mode="settings">⚙ Scanner settings</button>
+        <button class="nav" data-mode="paper">⚙ Auto paper</button>
         <button class="nav" data-mode="journal">▤ Trade journal</button>
         <button class="nav" data-mode="performance">▥ Performance</button>
+        <button class="nav" data-mode="settings">⚙ Scanner settings</button>
         <button class="nav" data-mode="sectors">▥ Sector rotation</button>
-        <button class="nav" data-mode="backtest">◌ Backtest</button>
         <button class="nav" data-mode="health">⚙ System health</button>
       </nav>
 
       <div class="quick-card">
         <h3>Quick Actions</h3>
-        <button id="scanBtnSide">Run Scan <span>READY</span></button>
-        <button id="autoPaperBtnSide">Auto Paper <span>RULES</span></button>
-        <button id="paperBtn">Paper Desk <span>LIVE</span></button>
-        <button id="refreshBtn">Refresh <span>READY</span></button>
+        <button id="scanBtn">Run ASX Scan <span>READY</span></button>
+        <button id="autoPaperBtn">Auto Paper Scan <span>RULED</span></button>
+        <button id="refreshBtn">Refresh Market <span>READY</span></button>
+        <button id="paperBtn">Paper Account <span>LIVE</span></button>
+        <button id="runBacktest">Run Backtest <span>READY</span></button>
       </div>
     </aside>
 
     <main class="main">
       <header class="topbar compact-topbar">
         <div>
-          <p class="eyebrow">Australia-only scanner</p>
+          <p class="eyebrow">Australia-only paper trading desk</p>
           <h2>TRADINGMINT PRO <span>ASX DESK</span></h2>
         </div>
 
         <div class="top-actions">
           <button id="voiceBtn" class="secondary">Enable sound & voice</button>
-          <button id="scanBtn">Run ASX Scan</button>
-          <button id="autoPaperBtn">Auto Paper Trade</button>
+          <button id="topAutoPaperBtn">Auto Paper</button>
         </div>
       </header>
 
-      <section class="session-strip card compact-strip" id="dashboardPanel">
+      <section class="session-strip card compact-strip">
         <div class="session-main">
           <span class="dot"></span>
           <div>
             <strong id="sessionState">ASX DATA</strong>
-            <small id="sessionTimer">Near-live public chart bars where available</small>
+            <small id="sessionTimer">Near-live public chart feed where available</small>
           </div>
         </div>
 
         <div><span>Market Regime</span><strong id="marketRegime">WAITING</strong></div>
         <div><span>ASX Trend</span><strong id="trendStat">SCANNING</strong></div>
         <div><span>Sector Leader</span><strong id="sectorStat">-</strong></div>
-        <div><span>Data Feed</span><strong class="live">● PUBLIC</strong></div>
+        <div><span>Auto Paper</span><strong id="autoPaperState" class="live">RULES ON</strong></div>
         <div><span>Last Update</span><strong id="updatedStat">Waiting</strong></div>
       </section>
 
-      <section class="metric-grid compact-metrics">
-        <article class="metric-card">
-          <div class="icon">↗</div>
-          <span>Market Regime</span>
-          <strong id="regimeCard">WAITING</strong>
+      <section class="mini-metric-row compact-metrics">
+        <article class="metric-card mini-metric-card">
+          <span>Signals</span>
+          <strong id="countStat">0</strong>
+          <small>Ranked ASX setups</small>
+        </article>
+
+        <article class="metric-card mini-metric-card">
+          <span>A-grade</span>
+          <strong id="aGradeStat">0</strong>
+          <small>Score 78+</small>
+        </article>
+
+        <article class="metric-card mini-metric-card">
+          <span>Confidence</span>
+          <strong id="confidenceStat">WAITING</strong>
           <small id="regimeSub">Run scan</small>
         </article>
 
-        <article class="metric-card">
-          <div class="icon">▥</div>
-          <span>Signals Found</span>
-          <strong id="countStat">0</strong>
-          <small>ASX public chart data</small>
-        </article>
-
-        <article class="metric-card">
-          <div class="icon">◉</div>
-          <span>Auto-Ready</span>
-          <strong id="aGradeStat">0</strong>
-          <small>Score 80+ and R:R 1.8+</small>
-        </article>
-
-        <article class="metric-card">
-          <div class="icon">⚙</div>
-          <span>Paper Rules</span>
-          <strong id="confidenceStat">WAITING</strong>
-          <small>Rule gate active</small>
+        <article class="metric-card mini-metric-card">
+          <span>Rules</span>
+          <strong>80 / 1.8R</strong>
+          <small>Score and R:R gate</small>
         </article>
       </section>
 
@@ -110,7 +105,7 @@
         <div class="chart-head">
           <div>
             <h3 id="chartTitle">ASX CANDLE CHART</h3>
-            <small id="chartMeta">Select a stock from the scanner. Paper entries, stops, targets and exits show here.</small>
+            <small id="chartMeta">Select a stock or run scan.</small>
           </div>
 
           <div class="timeframe-row">
@@ -125,14 +120,14 @@
           </div>
         </div>
 
-        <canvas id="chart" width="1500" height="560"></canvas>
+        <canvas id="chart" width="1500" height="620"></canvas>
       </section>
 
       <section class="dashboard-grid" id="scanPanel">
         <div class="card scanner-card">
           <div class="card-head">
             <div>
-              <h3>LIVE SCANNER <span>(Ranked by rule quality)</span></h3>
+              <h3>LIVE ASX SCANNER <span>(ranked by rule quality)</span></h3>
               <small id="meta">No scan yet</small>
             </div>
             <button class="mini" id="clearSelect">Clear</button>
@@ -162,20 +157,24 @@
           <div class="card detail-card" id="detail">
             <h3>TRADE DECISION STREAM</h3>
             <p class="muted">
-              Select a signal to inspect entry, stop, target, score breakdown, rule gate and risk notes.
+              Select a signal to inspect entry, stop, target, score breakdown and rule gate.
             </p>
           </div>
 
           <div class="card paper-card" id="paperPanel">
             <div class="card-head">
               <div>
-                <h3>Paper Trading Desk</h3>
-                <small>Only rule-approved trades should open automatically.</small>
+                <h3>Auto Paper Trading Desk</h3>
+                <small>Only opens trades that pass the rule gate.</small>
               </div>
-              <button class="mini" id="autoPaperMiniBtn">Auto</button>
+              <button class="mini" id="paperAutoPanelBtn">Run Auto</button>
             </div>
+
+            <div id="autoPaperOutput" class="auto-paper-box">
+              <p class="muted">Auto paper has not run yet.</p>
+            </div>
+
             <div id="paperStats" class="paper-grid">Loading...</div>
-            <pre id="autoPaperOutput" class="mini-output">Auto paper trader has not run yet.</pre>
           </div>
         </aside>
       </section>
@@ -195,9 +194,12 @@
       </section>
 
       <section class="controls card settings-panel" id="settingsPanel">
-        <div class="settings-title">
-          <h3>Scanner Settings</h3>
-          <p class="muted">Set-and-forget list. Keep this lower down so it does not waste prime chart space.</p>
+        <div class="settings-head">
+          <div>
+            <h3>Scanner Settings</h3>
+            <small>Set and forget. Keep this lower so the chart and scanner stay up top.</small>
+          </div>
+          <button id="dayBtn" class="secondary">Day scan</button>
         </div>
 
         <label>Symbols</label>
@@ -214,19 +216,15 @@
           <option value="staples">Staples</option>
           <option value="industrials">Industrials</option>
         </select>
-
-        <button id="dayBtn" class="secondary">Day scan</button>
-        <button id="discoverBtn" class="secondary">Optimize Scan</button>
       </section>
 
-      <section class="dashboard-grid lower panels" id="backtestPanel">
+      <section class="dashboard-grid lower panels" id="healthPanel">
         <div class="card">
           <h3>Backtest / Notes</h3>
-          <button id="runBacktest" class="secondary">Run Backtest</button>
           <pre id="backtestOutput">Run backtest to populate.</pre>
         </div>
 
-        <div class="card health-card" id="healthPanel">
+        <div class="card health-card">
           <h3>System Health</h3>
           <pre id="systemHealth">Checking...</pre>
         </div>
