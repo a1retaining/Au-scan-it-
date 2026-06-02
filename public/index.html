@@ -9,7 +9,7 @@
 
 <body>
   <div class="tickerbar" id="tickerbar">
-    ASX PUBLIC 1-MIN CHART DATA WHERE AVAILABLE • NO FAKE OPTION CHAINS • PAPER ONLY • AUD
+    ASX AUTO SCANNER • AUTO PAPER TRADER ACTIVE • NO FAKE OPTION CHAINS • PAPER ONLY • AUD
   </div>
 
   <div class="app-shell">
@@ -22,7 +22,7 @@
         </div>
       </div>
 
-      <div class="build-tag">AU-ASX-REAL-V8-AUTO</div>
+      <div class="build-tag">AU-ASX-REAL-V10-FULL-AUTO</div>
 
       <nav class="side-nav">
         <button class="nav active" data-mode="dashboard">▥ Dashboard</button>
@@ -38,8 +38,8 @@
 
       <div class="quick-card">
         <h3>Quick Actions</h3>
-        <button id="scanBtn">Run ASX Scan <span>READY</span></button>
-        <button id="autoPaperBtn">Auto Paper Trade <span>RULES</span></button>
+        <button id="scanBtn">Run ASX Scan <span>AUTO</span></button>
+        <button id="autoPaperBtn">Auto Paper Trade <span>ON</span></button>
         <button id="refreshBtn">Refresh Market <span>READY</span></button>
         <button id="runBacktest">Run Backtest <span>READY</span></button>
       </div>
@@ -54,7 +54,7 @@
 
         <div class="top-actions">
           <button id="voiceBtn" class="secondary">Enable sound & voice</button>
-          <button id="topAutoPaperBtn" class="secondary">Auto Paper</button>
+          <button id="topAutoPaperBtn" class="secondary">Auto Paper Now</button>
           <button id="topRefreshBtn">Refresh</button>
         </div>
       </header>
@@ -73,7 +73,7 @@
         <div class="chart-head">
           <div>
             <h3 id="chartTitle">ASX CANDLE CHART</h3>
-            <small id="chartMeta">Chart follows selected stock. Paper entries, stops, targets and exits show on chart.</small>
+            <small id="chartMeta">Auto scanner selects the highest ranked stock. Paper entries, stops, targets and exits show on chart.</small>
           </div>
 
           <div class="timeframe-row">
@@ -96,7 +96,7 @@
           <div class="card-head">
             <div>
               <h3>LIVE SCANNER <span>(ASX stocks ranked by quality)</span></h3>
-              <small id="meta">No scan yet</small>
+              <small id="meta">Auto scan starting...</small>
             </div>
             <button class="mini" id="clearSelect">Clear</button>
           </div>
@@ -128,25 +128,26 @@
               Select a signal to inspect entry, stop, target, score breakdown and rule gate.
             </p>
           </div>
-
-          <div class="card paper-card" id="paperPanel">
-            <div class="card-head">
-              <div>
-                <h3>Auto Paper Trading Desk</h3>
-                <small>Only enters trades that pass the rule gate.</small>
-              </div>
-              <button class="mini" id="paperPanelAutoBtn">Run Auto</button>
-            </div>
-            <div id="paperStats" class="paper-grid">Loading...</div>
-          </div>
         </aside>
+      </section>
+
+      <section class="card paper-card full-paper-row" id="paperPanel">
+        <div class="card-head">
+          <div>
+            <h3>FULL AUTO PAPER TRADING DESK</h3>
+            <small id="autoPaperStatus">Auto scanner and auto paper trader are active.</small>
+          </div>
+          <button class="mini" id="paperPanelAutoBtn">Run Auto Now</button>
+        </div>
+
+        <div id="paperStats" class="paper-grid">Loading...</div>
       </section>
 
       <section class="dashboard-grid lower" id="sectorsPanel">
         <div class="card indices">
           <h3>MARKET SNAPSHOT</h3>
           <div id="marketSnapshot" class="snapshot-list">
-            <p class="muted">Run scan to populate.</p>
+            <p class="muted">Auto scan will populate this.</p>
           </div>
         </div>
 
@@ -178,7 +179,7 @@
       <section class="dashboard-grid lower panels" id="healthPanel">
         <div class="card">
           <h3>Backtest / Notes</h3>
-          <pre id="backtestOutput">Run backtest to populate.</pre>
+          <pre id="backtestOutput">Auto paper results and backtest notes will show here.</pre>
         </div>
 
         <div class="card health-card">
