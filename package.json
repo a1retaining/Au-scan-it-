@@ -1,17 +1,13 @@
 {
-  "name": "tradingmint-asx-real",
+  "name": "tradingmint-asx-real-us-look",
   "version": "1.0.0",
-  "description": "Australia-only ASX scanner using public delayed market data. No fake option data.",
+  "description": "Australia-only ASX scanner with TradingMint PRO style dashboard and real public ASX data only.",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {
     "start": "node server.js",
     "check": "node --check server.js"
   },
-  "engines": {
-    "node": ">=18"
-  },
-  "dependencies": {
-    "express": "^4.19.2"
-  }
+  "engines": { "node": ">=18" },
+  "dependencies": { "express": "^4.19.2" }
 }

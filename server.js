@@ -4,7 +4,7 @@ const fs = require("fs");
 
 const app = express();
 const PORT = process.env.PORT || 10000;
-const VERSION = "tradingmint-asx-real-v5-old-look";
+const VERSION = "tradingmint-asx-real-v6-us-look-asx-real";
 const publicPath = path.join(__dirname, "public");
 const dataPath = path.join(__dirname, "data");
 const tradesPath = path.join(dataPath, "paper-trades.json");

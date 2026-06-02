@@ -3,50 +3,71 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Traders Success Formula ASX</title>
+  <title>TradingMint PRO ASX</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div class="shell">
+  <div class="tickerbar" id="tickerbar">ASX REAL PUBLIC DATA MODE • NO FAKE OPTION CHAINS • PAPER ONLY • AUD</div>
+  <div class="app-shell">
     <aside class="sidebar">
-      <div class="brand">
-        <div class="logo">ASX</div>
+      <div class="brand-block">
+        <div class="brand-mark"><span>TRADING</span><strong>MINT</strong></div>
         <div>
-          <h1>Traders Success Formula</h1>
-          <span>AU institutional desk</span>
+          <h1>PRO ASX</h1>
+          <p>AUTOMATED TRADING SYSTEM</p>
         </div>
       </div>
-      <div class="build">AU-ASX-INSTITUTIONAL-DESK-V26</div>
-      <nav>
-        <button class="nav active" data-mode="scan">Signal scanner</button>
-        <button class="nav" data-mode="day">Day scan</button>
-        <button class="nav" data-mode="discover">Discovery</button>
-        <button class="nav" data-mode="paper">Paper account</button>
-        <button class="nav" data-mode="backtest">Backtest</button>
+      <div class="build-tag">AU-ASX-REAL-V6</div>
+      <nav class="side-nav">
+        <button class="nav active" data-mode="dashboard">▥ Dashboard</button>
+        <button class="nav" data-mode="scan">⌕ Live scanner</button>
+        <button class="nav" data-mode="paper">⚙ Positions</button>
+        <button class="nav" data-mode="journal">▤ Trade journal</button>
+        <button class="nav" data-mode="performance">▥ Performance</button>
+        <button class="nav" data-mode="backtest">◌ Backtest analytics</button>
+        <button class="nav" data-mode="regime">▱ Market regime</button>
+        <button class="nav" data-mode="sectors">▥ Sector rotation</button>
+        <button class="nav" data-mode="risk">♢ Risk management</button>
+        <button class="nav" data-mode="health">⚙ System health</button>
       </nav>
-      <div class="lockbox">
-        <strong>Live money locked</strong>
-        <p>Paper-testing only. No broker execution. No fabricated ASX options chains.</p>
+      <div class="quick-card">
+        <h3>Quick Actions</h3>
+        <button id="runBacktest">Run Backtest <span>READY</span></button>
+        <button id="discoverBtn">Optimize Scan <span>ON</span></button>
+        <button id="paperBtn">Paper Trading <span>LIVE</span></button>
+        <button id="refreshBtn">Refresh Market <span>READY</span></button>
       </div>
     </aside>
 
-    <main class="desk">
+    <main class="main">
       <header class="topbar">
         <div>
-          <p class="eyebrow">Australia-only real data mode</p>
-          <h2>ASX signal desk</h2>
+          <p class="eyebrow">Australia-only scanner</p>
+          <h2>TRADINGMINT PRO <span>ASX DESK</span></h2>
         </div>
-        <div class="actions">
-          <button id="refreshBtn">Refresh scan</button>
-          <button id="voiceBtn" class="ghost">Enable sound & voice</button>
+        <div class="top-actions">
+          <button id="voiceBtn" class="secondary">Enable sound & voice</button>
+          <button id="scanBtn">Run ASX Scan</button>
         </div>
       </header>
 
-      <section class="stats">
-        <article><span>Market</span><strong id="marketStat">ASX</strong><small id="updatedStat">Waiting</small></article>
-        <article><span>Signals</span><strong id="countStat">0</strong><small>Real public chart feed</small></article>
-        <article><span>Best sector</span><strong id="sectorStat">-</strong><small>From returned signals</small></article>
-        <article><span>Paper equity</span><strong id="equityStat">$5,000</strong><small>AUD paper only</small></article>
+      <section class="session-strip card">
+        <div class="session-main">
+          <span class="dot"></span>
+          <div><strong id="sessionState">ASX DATA</strong><small id="sessionTimer">Public delayed chart feed</small></div>
+        </div>
+        <div><span>Market Regime</span><strong id="marketRegime">WAITING</strong></div>
+        <div><span>ASX Trend</span><strong id="trendStat">SCANNING</strong></div>
+        <div><span>Sector Leader</span><strong id="sectorStat">-</strong></div>
+        <div><span>Data Feed</span><strong class="live">● REAL</strong></div>
+        <div><span>Last Update</span><strong id="updatedStat">Waiting</strong></div>
+      </section>
+
+      <section class="metric-grid">
+        <article class="metric-card"><div class="icon">↗</div><span>Market Regime</span><strong id="regimeCard">WAITING</strong><small id="regimeSub">Run scan</small></article>
+        <article class="metric-card"><div class="icon">▥</div><span>Signals Found</span><strong id="countStat">0</strong><small>Real public ASX chart data</small></article>
+        <article class="metric-card"><div class="icon">◉</div><span>A-grade Setups</span><strong id="aGradeStat">0</strong><small>Score 78+</small></article>
+        <article class="metric-card"><div class="icon">76</div><span>System Confidence</span><strong id="confidenceStat">WAITING</strong><small>Environment</small></article>
       </section>
 
       <section class="controls card">
@@ -63,53 +84,40 @@
           <option value="staples">Staples</option>
           <option value="industrials">Industrials</option>
         </select>
-        <button id="scanBtn">Run ASX scan</button>
-        <button id="dayBtn" class="ghost">Day scan</button>
-        <button id="discoverBtn" class="ghost">Discover</button>
+        <button id="dayBtn" class="secondary">Day scan</button>
       </section>
 
-      <section class="grid">
-        <div class="card queue">
-          <div class="card-head"><h3>Priority queue</h3><span id="meta">No scan yet</span></div>
+      <section class="dashboard-grid">
+        <div class="card scanner-card">
+          <div class="card-head"><div><h3>LIVE SCANNER <span>(Ranked by Quality)</span></h3><small id="meta">No scan yet</small></div><button class="mini" id="clearSelect">Clear</button></div>
           <div class="table-wrap">
             <table>
-              <thead>
-                <tr><th>Code</th><th>Score</th><th>Status</th><th>Setup</th><th>Price</th><th>Entry area</th><th>Stop</th><th>Target</th><th>R:R</th></tr>
-              </thead>
+              <thead><tr><th>Rank</th><th>Ticker</th><th>Setup</th><th>Score</th><th>R:R</th><th>Trend</th><th>Price</th><th>Entry area</th><th>Action</th></tr></thead>
               <tbody id="signals"></tbody>
             </table>
           </div>
         </div>
 
-        <aside class="card detail">
-          <div class="card-head"><h3>Selected setup</h3><button id="readBtn" class="mini">Read</button></div>
-          <div id="selected" class="setup-empty">Click a signal to inspect it.</div>
-          <div class="button-row">
-            <button id="optionsBtn" class="ghost">ASX options check</button>
-            <button id="paperOpenBtn" class="ghost">Paper enter</button>
-          </div>
-          <pre id="optionsOut"></pre>
+        <aside class="right-stack">
+          <div class="card detail-card" id="detail"><h3>TRADE DECISION STREAM</h3><p class="muted">Select a signal to inspect entry, stop, target, score breakdown and risk notes.</p></div>
+          <div class="card indices"><h3>MARKET SNAPSHOT</h3><div id="marketSnapshot" class="snapshot-list"><p class="muted">Run scan to populate.</p></div></div>
         </aside>
       </section>
 
-      <section class="grid lower">
+      <section class="dashboard-grid lower">
         <div class="card chart-card">
-          <div class="card-head"><h3>Chart panel</h3><span id="chartMeta">Select a stock</span></div>
-          <canvas id="chart" width="900" height="360"></canvas>
+          <div class="card-head"><div><h3>ASX CANDLE CHART</h3><small id="chartMeta">Real public OHLCV chart data from backend</small></div></div>
+          <canvas id="chart" width="1100" height="420"></canvas>
         </div>
-        <div class="card heatmap">
-          <div class="card-head"><h3>Heatmap</h3><span>Sector flow</span></div>
-          <div id="heatmapGrid" class="heatmap-grid"></div>
-        </div>
+        <div class="card heatmap"><h3>SECTOR ROTATION</h3><div id="heatmapGrid" class="heatmap-grid"></div></div>
       </section>
 
-      <section class="card">
-        <div class="card-head"><h3>Backtest / system log</h3><button id="backtestBtn" class="mini">Run backtest</button></div>
-        <pre id="output">Ready. This frontend uses the backend API only. It does not display generated fallback trades or fake options.</pre>
+      <section class="dashboard-grid lower panels">
+        <div class="card"><h3>Paper Account</h3><pre id="paperStats">Loading...</pre></div>
+        <div class="card"><h3>System Health</h3><pre id="systemHealth">Checking...</pre></div>
       </section>
     </main>
   </div>
-
   <div id="toast" class="toast hidden"></div>
   <script src="app.js"></script>
 </body>
