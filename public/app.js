@@ -17,62 +17,50 @@ const num = (v) =>
 
 function endpoint(path, params = {}) {
   const url = new URL(path, window.location.origin);
-
   for (const [key, value] of Object.entries(params)) {
     if (value !== undefined && value !== null && String(value).trim() !== "") {
       url.searchParams.set(key, value);
     }
   }
-
   return url.toString();
 }
 
 async function getJson(url) {
   const response = await fetch(url, { cache: "no-store" });
   const json = await response.json();
-
   if (!response.ok || json.ok === false) {
     throw new Error(json.error || "Request failed");
   }
-
   return json;
 }
 
 function toast(message) {
   const t = $("toast");
   if (!t) return;
-
   t.textContent = message;
   t.classList.remove("hidden");
-
   setTimeout(() => t.classList.add("hidden"), 4200);
 }
 
 function speak(text) {
   if (!voiceEnabled || !window.speechSynthesis) return;
-
   const u = new SpeechSynthesisUtterance(text);
   u.rate = 0.95;
-
   window.speechSynthesis.cancel();
   window.speechSynthesis.speak(u);
 }
 
 function scoreClass(score) {
   score = Number(score || 0);
-
   if (score >= 80) return "good";
   if (score >= 60) return "mid";
-
   return "bad";
 }
 
 function decisionClass(decision) {
   const d = String(decision || "");
-
   if (d.includes("AUTO") || d.includes("ENTER") || d.includes("READY")) return "enter";
   if (d.includes("BLOCK") || d.includes("AVOID")) return "block";
-
   return "";
 }
 
@@ -83,33 +71,19 @@ function shortSymbol(symbol) {
 function trendWord(s) {
   const c5 = Number(s.change5dPct || 0);
   const c20 = Number(s.change20dPct || 0);
-
   if (c5 > 1 && c20 > 2) return "BULLISH";
   if (c5 < -1 && c20 < -2) return "BEARISH";
-
   return "NEUTRAL";
-}
-
-function calcRiskReward(entry, stop, target) {
-  const risk = Number(entry) - Number(stop);
-  const reward = Number(target) - Number(entry);
-
-  if (!Number.isFinite(risk) || !Number.isFinite(reward)) return 0;
-  if (risk <= 0 || reward <= 0) return 0;
-
-  return Math.round((reward / risk) * 100) / 100;
 }
 
 function qualityRank(s) {
   const score = Number(s.score || 0);
   const rr = Number(s.riskReward || 0);
   const liq = Number(s.avgDollarVolume20 || 0);
-
-  let q = score + Math.min(14, rr * 3.5);
+  let q = score + Math.min(14, rr * 4);
 
   if (liq >= 20000000) q += 5;
-  if (String(s.decision || "").includes("AUTO")) q += 12;
-  if (String(s.decision || "").includes("ENTER")) q += 8;
+  if (String(s.decision || "").includes("AUTO")) q += 10;
   if ((s.warnings || []).length) q -= Math.min(10, s.warnings.length * 2);
 
   return Math.round(q);
@@ -117,50 +91,13 @@ function qualityRank(s) {
 
 function signalSector(symbol) {
   const s = shortSymbol(symbol);
-
   if (["CBA", "NAB", "WBC", "ANZ", "MQG", "BEN", "BOQ"].includes(s)) return "Banks";
   if (["BHP", "RIO", "FMG", "S32", "NST", "NEM", "MIN", "IGO", "LYC", "PLS"].includes(s)) return "Materials";
   if (["WDS", "STO", "ORG", "BPT", "VEA", "WHC", "YAL"].includes(s)) return "Energy";
   if (["CSL", "RMD", "SHL", "COH", "FPH", "PME", "RHC"].includes(s)) return "Healthcare";
   if (["XRO", "WTC", "ALU", "NXT", "SEK", "CPU", "ZIP"].includes(s)) return "Technology";
   if (["WOW", "COL", "WES", "A2M", "TWE", "EDV"].includes(s)) return "Staples";
-
   return "Other";
-}
-
-function paperRuleStatus(s) {
-  const score = Number(s.score || 0);
-  const rr = Number(s.riskReward || 0);
-  const trend = trendWord(s);
-  const distance = Number(s.distanceToBuyZonePct || 0);
-
-  const checks = [
-    {
-      name: "Score",
-      pass: score >= 80,
-      label: `${score}/80`
-    },
-    {
-      name: "R:R",
-      pass: rr >= 1.8,
-      label: `${num(rr)}/1.80`
-    },
-    {
-      name: "Trend",
-      pass: trend !== "BEARISH",
-      label: trend
-    },
-    {
-      name: "Buy zone",
-      pass: distance <= 1.75,
-      label: `${num(distance)}%`
-    }
-  ];
-
-  return {
-    allowed: checks.every((c) => c.pass),
-    checks
-  };
 }
 
 function renderHeatmap(signals) {
@@ -168,7 +105,6 @@ function renderHeatmap(signals) {
 
   for (const s of signals || []) {
     const sector = s.sector || signalSector(s.symbol);
-
     if (!grouped.has(sector)) grouped.set(sector, []);
     grouped.get(sector).push(Number(s.score || 0));
   }
@@ -181,23 +117,15 @@ function renderHeatmap(signals) {
     }))
     .sort((a, b) => b.avg - a.avg);
 
-  const heatmap = $("heatmapGrid");
-
-  if (heatmap) {
-    heatmap.innerHTML =
+  if ($("heatmapGrid")) {
+    $("heatmapGrid").innerHTML =
       rows
         .map(
           (r, i) =>
-            `<div class="tile">
-              <strong>${i + 1} ${r.sector}</strong>
-              <span>${r.count} signals | strength ${Math.round(r.avg)}/100</span>
-            </div>`
+            `<div class="tile"><strong>${i + 1} ${r.sector}</strong><span>${r.count} signals | strength ${Math.round(r.avg)}/100</span></div>`
         )
         .join("") ||
-      `<div class="tile">
-        <strong>No sector data</strong>
-        <span>Run a scan first</span>
-      </div>`;
+      `<div class="tile"><strong>No sector data</strong><span>Run a scan first</span></div>`;
   }
 
   if ($("sectorStat")) {
@@ -206,66 +134,52 @@ function renderHeatmap(signals) {
 }
 
 function renderSnapshot(signals) {
-  const top = [...(signals || [])]
-    .sort((a, b) => qualityRank(b) - qualityRank(a))
-    .slice(0, 6);
+  const top = [...(signals || [])].sort((a, b) => qualityRank(b) - qualityRank(a)).slice(0, 6);
 
   if ($("marketSnapshot")) {
     $("marketSnapshot").innerHTML = top.length
       ? top
           .map(
             (s) =>
-              `<div class="snapshot-item">
-                <strong>${shortSymbol(s.symbol)}</strong>
-                <span>${num(s.changePercent)}% | ${s.score}/100</span>
-              </div>`
+              `<div class="snapshot-item"><strong>${shortSymbol(s.symbol)}</strong><span>${num(s.changePercent)}% | ${s.score}/100</span></div>`
           )
           .join("")
       : `<p class="muted">Run scan to populate.</p>`;
   }
 
-  const tape = top
-    .map((s) => `${shortSymbol(s.symbol)} ${num(s.changePercent)}%`)
-    .join("   •   ");
+  const tape = top.map((s) => `${shortSymbol(s.symbol)} ${num(s.changePercent)}%`).join("   •   ");
 
   if ($("tickerbar")) {
     $("tickerbar").textContent =
-      `ASX SCANNER • ${tape || "NO SCAN YET"} • AUTO PAPER ENABLED • NO FAKE OPTION CHAINS`;
+      `ASX NEAR-LIVE PUBLIC CHART DATA • ${tape || "NO SCAN YET"} • AUTO PAPER RULES • NO FAKE OPTIONS`;
   }
 }
 
 function renderSignals(data) {
-  lastSignals = (data.signals || [])
-    .slice()
-    .sort((a, b) => qualityRank(b) - qualityRank(a));
+  lastSignals = (data.signals || []).slice().sort((a, b) => qualityRank(b) - qualityRank(a));
 
-  const aGrades = lastSignals.filter((s) => Number(s.score || 0) >= 80).length;
-  const autoReady = lastSignals.filter((s) => paperRuleStatus(s).allowed).length;
+  const autoReady = lastSignals.filter((s) => String(s.decision || "").includes("AUTO")).length;
 
   if ($("marketRegime")) $("marketRegime").textContent = String(data.marketRegime || data.market || "ASX").toUpperCase();
   if ($("regimeCard")) $("regimeCard").textContent = String(data.marketRegime || data.market || "ASX").toUpperCase();
   if ($("regimeSub")) $("regimeSub").textContent = data.marketSource ? `Source: ${data.marketSource}` : "Sydney market";
   if ($("trendStat")) $("trendStat").textContent = lastSignals.length && lastSignals[0] ? trendWord(lastSignals[0]) : "SCANNING";
   if ($("countStat")) $("countStat").textContent = String(data.count ?? lastSignals.length);
-  if ($("aGradeStat")) $("aGradeStat").textContent = String(aGrades);
-  if ($("confidenceStat")) $("confidenceStat").textContent = autoReady > 0 ? "AUTO READY" : aGrades >= 1 ? "WATCH" : "LOW";
+  if ($("aGradeStat")) $("aGradeStat").textContent = String(autoReady);
+  if ($("confidenceStat")) $("confidenceStat").textContent = autoReady >= 2 ? "ACTIVE" : autoReady === 1 ? "READY" : "WAITING";
   if ($("updatedStat")) $("updatedStat").textContent = data.updatedAt ? new Date(data.updatedAt).toLocaleTimeString() : "Updated";
 
   if ($("meta")) {
     $("meta").textContent =
-      `${data.mode || "scan"} | ${lastSignals.length} returned | ${autoReady} auto-paper ready | Sorted by quality`;
+      `${data.mode || "scan"} | ${lastSignals.length} returned | Auto-ready: ${autoReady} | Public ASX chart feed`;
   }
 
-  const tbody = $("signals");
-
-  if (tbody) {
-    tbody.innerHTML =
+  if ($("signals")) {
+    $("signals").innerHTML =
       lastSignals
         .map((s, idx) => {
           const selected = selectedSignal && selectedSignal.symbol === s.symbol ? "selected" : "";
           const trend = trendWord(s);
-          const rules = paperRuleStatus(s);
-          const actionLabel = rules.allowed ? "AUTO READY" : s.decision || "WATCH";
 
           return `<tr class="${selected}" data-symbol="${s.symbol}">
             <td>${idx + 1}</td>
@@ -276,15 +190,11 @@ function renderSignals(data) {
             <td>${trend}</td>
             <td>${money(s.price)}</td>
             <td>${money(s.buyZoneLow)} - ${money(s.buyZoneHigh)}</td>
-            <td><span class="pill ${rules.allowed ? "enter" : decisionClass(s.decision)}">${actionLabel}</span></td>
+            <td><span class="pill ${decisionClass(s.decision)}">${s.decision || "WATCH"}</span></td>
           </tr>`;
         })
         .join("") ||
-      `<tr>
-        <td colspan="9">
-          No signals returned. If this is during a Yahoo outage, the backend will show the real error instead of fake data.
-        </td>
-      </tr>`;
+      `<tr><td colspan="9">No signals returned. The backend will show real fetch errors rather than fake data.</td></tr>`;
 
     document.querySelectorAll("#signals tr[data-symbol]").forEach((row) =>
       row.addEventListener("click", () => selectSignal(row.dataset.symbol))
@@ -293,6 +203,7 @@ function renderSignals(data) {
 
   renderHeatmap(lastSignals);
   renderSnapshot(lastSignals);
+  loadPaper();
 
   if (!selectedSignal && lastSignals[0]) {
     selectSignal(lastSignals[0].symbol, true);
@@ -314,30 +225,21 @@ function selectSignal(symbol, quiet = false) {
   }
 
   if (selectedSignal && !quiet) {
-    speak(
-      `${shortSymbol(selectedSignal.symbol)} ${selectedSignal.setup}. Score ${selectedSignal.score}. Risk reward ${selectedSignal.riskReward}.`
-    );
+    speak(`${shortSymbol(selectedSignal.symbol)} ${selectedSignal.setup}. Score ${selectedSignal.score}. Risk reward ${selectedSignal.riskReward}.`);
   }
 }
 
 function renderDetail(s) {
   if (!s) {
-    $("detail").innerHTML = `
-      <h3>TRADE DECISION STREAM</h3>
-      <p class="muted">Select a signal to inspect entry, stop, target, score breakdown and risk notes.</p>`;
+    $("detail").innerHTML =
+      `<h3>TRADE DECISION STREAM</h3><p class="muted">Select a signal to inspect entry, stop, target, score breakdown and risk notes.</p>`;
     return;
   }
 
-  const reasons = (s.reasons || [])
-    .slice(0, 5)
-    .map((x) => `<li>${x}</li>`)
-    .join("");
-
+  const reasons = (s.reasons || []).slice(0, 5).map((x) => `<li>${x}</li>`).join("");
   const warnings =
-    (s.warnings || [])
-      .slice(0, 5)
-      .map((x) => `<li>${x}</li>`)
-      .join("") || `<li>No major warning returned by scanner.</li>`;
+    (s.warnings || []).slice(0, 5).map((x) => `<li>${x}</li>`).join("") ||
+    `<li>No major warning returned by scanner.</li>`;
 
   const parts = (s.scoreParts || [])
     .slice()
@@ -346,15 +248,16 @@ function renderDetail(s) {
     .map((p) => `<div class="snapshot-item"><strong>${p.name}</strong><span>${p.points}</span></div>`)
     .join("");
 
-  const rules = paperRuleStatus(s);
-  const gate = rules.allowed ? "AUTO PAPER READY" : "RULES BLOCK";
+  const checks = s.paperRules && s.paperRules.checks
+    ? s.paperRules.checks.map((c) =>
+        `<div class="snapshot-item"><strong>${c.name}</strong><span>${c.pass ? "PASS" : "BLOCK"} | ${c.actual} / ${c.required}</span></div>`
+      ).join("")
+    : `<div class="snapshot-item"><strong>No rule data</strong><span>Run scan</span></div>`;
+
+  const gate = s.paperRules && s.paperRules.allowed ? "RULES PASS" : "RULES BLOCK";
 
   $("detail").innerHTML = `<h3>TRADE DECISION STREAM</h3>
-
-    <div class="detail-title">
-      ${shortSymbol(s.symbol)}
-      <small>${s.setup || "ASX setup"} | ${s.decision || "WATCH"} | ${gate}</small>
-    </div>
+    <div class="detail-title">${shortSymbol(s.symbol)} <small>${s.setup || "ASX setup"} | ${s.decision || "WATCH"} | ${gate}</small></div>
 
     <div class="metric-row">
       <div class="small-metric"><span>Entry area</span><strong>${money(s.buyZoneLow)} - ${money(s.buyZoneHigh)}</strong></div>
@@ -372,18 +275,8 @@ function renderDetail(s) {
       <button class="secondary" onclick="document.getElementById('chartPanel').scrollIntoView({behavior:'smooth'})">View Chart</button>
     </div>
 
-    <h4>Paper Trade Rule Gate</h4>
-    <div class="snapshot-list">
-      ${rules.checks
-        .map(
-          (c) =>
-            `<div class="snapshot-item">
-              <strong>${c.name}</strong>
-              <span>${c.pass ? "PASS" : "BLOCK"} ${c.label}</span>
-            </div>`
-        )
-        .join("")}
-    </div>
+    <h4>Paper Rule Gate</h4>
+    <div class="snapshot-list">${checks}</div>
 
     <h4>Why it ranked</h4>
     <ul class="reason-list">${reasons || "<li>No reasons returned.</li>"}</ul>
@@ -414,22 +307,15 @@ async function loadChart(symbol) {
       })
     );
 
-    const bars = data.bars || selected.bars || [];
-    drawChart(selected, bars, data.source || selected.source || "public data");
+    drawChart(selected, data.bars || selected.bars || [], data.source || selected.source || "public data");
   } catch (e) {
-    const fallbackBars = selected.bars || [];
-    drawChart(selected, fallbackBars, selected.source || "public data");
-
-    if ($("chartMeta")) {
-      $("chartMeta").textContent = `${shortSymbol(selected.symbol)} | fallback chart | ${e.message}`;
-    }
+    drawChart(selected, selected.bars || [], selected.source || "public data");
+    if ($("chartMeta")) $("chartMeta").textContent = `${shortSymbol(selected.symbol)} | fallback chart | ${e.message}`;
   }
 }
 
 function getTradesForSymbol(symbol) {
-  return paperTradesCache.filter(
-    (t) => t.symbol === symbol || shortSymbol(t.symbol) === shortSymbol(symbol)
-  );
+  return paperTradesCache.filter((t) => t.symbol === symbol || shortSymbol(t.symbol) === shortSymbol(symbol));
 }
 
 function drawChart(s, incomingBars, sourceLabel) {
@@ -444,7 +330,7 @@ function drawChart(s, incomingBars, sourceLabel) {
   ctx.fillStyle = "#03070d";
   ctx.fillRect(0, 0, W, H);
 
-  const bars = (incomingBars || s.bars || []).slice(-160);
+  const bars = (incomingBars || s.bars || []).slice(-140);
 
   if (!bars.length) {
     ctx.fillStyle = "#8fa4bc";
@@ -463,35 +349,27 @@ function drawChart(s, incomingBars, sourceLabel) {
   const max = Math.max(...highs, Number(s.target1 || 0), ...tradeLevels);
   const min = Math.min(...lows, Number(s.stopLoss || Infinity), ...tradeLevels);
 
-  const leftPad = 62;
-  const rightPad = 26;
+  const leftPad = 58;
+  const rightPad = 24;
   const topPad = 28;
-  const bottomPad = 46;
+  const bottomPad = 42;
   const chartH = H - topPad - bottomPad;
   const chartW = W - leftPad - rightPad;
 
   const y = (v) => topPad + ((max - v) / Math.max(max - min, 0.01)) * chartH;
   const x = (i) => leftPad + i * (chartW / Math.max(1, bars.length - 1));
 
-  window.chartScale = {
-    priceToY(price) {
-      return y(price);
-    }
-  };
-
   ctx.strokeStyle = "rgba(66,232,255,.12)";
   ctx.lineWidth = 1;
 
   for (let i = 0; i < 6; i++) {
     const yy = topPad + i * (chartH / 5);
-
     ctx.beginPath();
     ctx.moveTo(leftPad - 10, yy);
     ctx.lineTo(W - rightPad, yy);
     ctx.stroke();
 
     const price = max - (i / 5) * (max - min);
-
     ctx.fillStyle = "#61758d";
     ctx.font = "11px sans-serif";
     ctx.fillText(money(price), 8, yy + 4);
@@ -516,12 +394,7 @@ function drawChart(s, incomingBars, sourceLabel) {
     ctx.lineTo(xx, low);
     ctx.stroke();
 
-    ctx.fillRect(
-      xx - bw / 2,
-      Math.min(open, close),
-      bw,
-      Math.max(2, Math.abs(close - open))
-    );
+    ctx.fillRect(xx - bw / 2, Math.min(open, close), bw, Math.max(2, Math.abs(close - open)));
   });
 
   function line(val, color, label) {
@@ -557,10 +430,7 @@ function drawChart(s, incomingBars, sourceLabel) {
     line(t.entry, "#42e8ff", "Paper entry");
     line(t.stop, "#ff5d5d", "Paper stop");
     line(t.target, "#34f59b", "Paper target");
-
-    if (Number.isFinite(Number(t.exit))) {
-      line(t.exit, "#ffc857", "Paper exit");
-    }
+    if (Number.isFinite(Number(t.exit))) line(t.exit, "#ffc857", "Paper exit");
   });
 
   ctx.fillStyle = "#8fa4bc";
@@ -573,7 +443,7 @@ function drawChart(s, incomingBars, sourceLabel) {
 
   if ($("chartMeta")) {
     $("chartMeta").textContent =
-      `${shortSymbol(s.symbol)} | ${bars.length} bars | ${currentRange} / ${currentInterval} | Entry, stop, target and paper trades`;
+      `${shortSymbol(s.symbol)} | ${bars.length} bars | ${currentRange} / ${currentInterval} | Paper levels shown`;
   }
 }
 
@@ -585,20 +455,16 @@ async function runScan(mode = "scan") {
     const symbols = $("symbols") ? $("symbols").value : "";
 
     const data = await getJson(
-      endpoint(
-        mode === "discover" ? "/api/discover" : mode === "day" ? "/api/day-scan" : "/api/scan",
-        {
-          symbols,
-          sector,
-          scanLimit: 160,
-          limit: 100
-        }
-      )
+      endpoint(mode === "discover" ? "/api/discover" : mode === "day" ? "/api/day-scan" : "/api/scan", {
+        symbols,
+        sector,
+        scanLimit: 160,
+        limit: 100
+      })
     );
 
     selectedSignal = null;
     renderSignals(data);
-
     toast("ASX scan complete");
   } catch (e) {
     toast(e.message);
@@ -608,16 +474,17 @@ async function runScan(mode = "scan") {
 
 async function runAutoPaper() {
   try {
-    toast("Running auto paper trader...");
+    toast("Running automatic paper trader...");
+
+    const sector = $("sector") ? $("sector").value : "";
+    const symbols = $("symbols") ? $("symbols").value : "";
 
     const response = await fetch("/api/paper/auto", {
       method: "POST",
-      headers: {
-        "content-type": "application/json"
-      },
+      headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        sector: $("sector") ? $("sector").value : "",
-        symbols: $("symbols") ? $("symbols").value : "",
+        sector,
+        symbols,
         scanLimit: 160,
         maxEntries: 2
       })
@@ -629,7 +496,9 @@ async function runAutoPaper() {
       throw new Error(data.error || "Auto paper failed");
     }
 
-    toast(`Auto paper complete. Opened ${data.openedCount} trades.`);
+    if ($("autoPaperOutput")) {
+      $("autoPaperOutput").textContent = JSON.stringify(data, null, 2);
+    }
 
     await loadPaper();
 
@@ -637,23 +506,12 @@ async function runAutoPaper() {
       await loadChart(selectedSignal.symbol);
     }
 
-    if ($("backtestOutput")) {
-      $("backtestOutput").textContent = JSON.stringify(
-        {
-          mode: data.mode,
-          openedCount: data.openedCount,
-          blockedCount: data.blockedCount,
-          rules: data.rules,
-          opened: data.opened,
-          blocked: data.blocked,
-          topCandidates: data.topCandidates
-        },
-        null,
-        2
-      );
-    }
+    toast(`${data.openedCount || 0} auto paper trades opened`);
   } catch (e) {
     toast(e.message);
+    if ($("autoPaperOutput")) {
+      $("autoPaperOutput").textContent = e.message;
+    }
   }
 }
 
@@ -661,15 +519,8 @@ async function openPaperTrade(symbol) {
   const s = lastSignals.find((x) => x.symbol === symbol);
   if (!s) return;
 
-  const rules = paperRuleStatus(s);
-
-  if (!rules.allowed) {
-    const failed = rules.checks
-      .filter((c) => !c.pass)
-      .map((c) => `${c.name}: ${c.label}`)
-      .join(", ");
-
-    toast(`Trade blocked by rules: ${failed}`);
+  if (!s.paperRules || !s.paperRules.allowed) {
+    toast("Manual paper trade blocked: this signal does not pass the rule gate.");
     return;
   }
 
@@ -678,9 +529,7 @@ async function openPaperTrade(symbol) {
   try {
     const response = await fetch("/api/paper/open", {
       method: "POST",
-      headers: {
-        "content-type": "application/json"
-      },
+      headers: { "content-type": "application/json" },
       body: JSON.stringify({
         symbol,
         side: "long",
@@ -706,12 +555,9 @@ async function openPaperTrade(symbol) {
     }
 
     toast(`Paper trade opened for ${shortSymbol(symbol)}`);
-
     await loadPaper();
 
-    if (selectedSignal) {
-      await loadChart(selectedSignal.symbol);
-    }
+    if (selectedSignal) await loadChart(selectedSignal.symbol);
   } catch (e) {
     toast(e.message);
   }
@@ -728,10 +574,7 @@ async function checkOptions(symbol) {
 
 async function loadPaper() {
   try {
-    const [stats, trades] = await Promise.all([
-      getJson("/api/paper/stats"),
-      getJson("/api/paper/trades")
-    ]);
+    const [stats, trades] = await Promise.all([getJson("/api/paper/stats"), getJson("/api/paper/trades")]);
 
     const st = stats.stats || {};
     const rows = (trades.trades || []).slice(0, 40);
@@ -770,16 +613,9 @@ async function loadPaper() {
               </div>`
             )
             .join("") ||
-          `<div class="paper-trade">
-            <strong>No paper trades yet</strong>
-            <small>Run Auto Paper or select an ASX signal that passes the rule gate.</small>
-          </div>`
+          `<div class="paper-trade"><strong>No paper trades yet</strong><small>Click Auto Paper Trade or Manual Paper Entry on an approved signal.</small></div>`
         }
       </div>`;
-    }
-
-    if (selectedSignal) {
-      drawChart(selectedSignal, selectedSignal.bars || [], selectedSignal.source || "public data");
     }
   } catch (e) {
     if ($("paperStats")) $("paperStats").innerHTML = `<p class="muted">${e.message}</p>`;
@@ -793,9 +629,7 @@ async function closePaperTrade(id) {
   try {
     const response = await fetch("/api/paper/close", {
       method: "POST",
-      headers: {
-        "content-type": "application/json"
-      },
+      headers: { "content-type": "application/json" },
       body: JSON.stringify({
         id,
         exit,
@@ -810,12 +644,9 @@ async function closePaperTrade(id) {
     }
 
     toast("Paper trade closed");
-
     await loadPaper();
 
-    if (selectedSignal) {
-      await loadChart(selectedSignal.symbol);
-    }
+    if (selectedSignal) await loadChart(selectedSignal.symbol);
   } catch (e) {
     toast(e.message);
   }
@@ -824,10 +655,7 @@ async function closePaperTrade(id) {
 async function loadHealth() {
   try {
     const h = await getJson("/api/health");
-
-    if ($("systemHealth")) {
-      $("systemHealth").textContent = JSON.stringify(h, null, 2);
-    }
+    if ($("systemHealth")) $("systemHealth").textContent = JSON.stringify(h, null, 2);
   } catch (e) {
     if ($("systemHealth")) $("systemHealth").textContent = e.message;
   }
@@ -846,10 +674,7 @@ async function runBacktest() {
       })
     );
 
-    if ($("backtestOutput")) {
-      $("backtestOutput").textContent = JSON.stringify(data.stats || data, null, 2);
-    }
-
+    if ($("backtestOutput")) $("backtestOutput").textContent = JSON.stringify(data.stats || data, null, 2);
     toast("Backtest complete");
   } catch (e) {
     toast(e.message);
@@ -865,11 +690,7 @@ function setupTimeframeButtons() {
       currentRange = btn.dataset.range || "1y";
       currentInterval = btn.dataset.interval || "1d";
 
-      if (selectedSignal) {
-        await loadChart(selectedSignal.symbol);
-      } else if (window.selectedTicker) {
-        await loadChart(window.selectedTicker);
-      }
+      if (selectedSignal) await loadChart(selectedSignal.symbol);
     });
   });
 }
@@ -883,54 +704,44 @@ function setupNav() {
       const mode = btn.dataset.mode || "dashboard";
 
       const map = {
-        dashboard: "chartPanel",
-        scan: "scanPanel",
+        dashboard: "dashboardPanel",
         chart: "chartPanel",
+        scan: "scanPanel",
         paper: "paperPanel",
+        settings: "settingsPanel",
         journal: "paperPanel",
         performance: "paperPanel",
-        settings: "settingsPanel",
-        backtest: "healthPanel",
-        regime: "sectorsPanel",
         sectors: "sectorsPanel",
-        risk: "paperPanel",
+        backtest: "backtestPanel",
         health: "healthPanel"
       };
 
-      const id = map[mode] || "chartPanel";
+      const id = map[mode] || "scanPanel";
       const el = $(id);
 
-      if (el) {
-        el.scrollIntoView({
-          behavior: "smooth",
-          block: "start"
-        });
-      }
-
-      if (["paper", "journal", "performance", "risk"].includes(mode)) loadPaper();
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+      if (["paper", "journal", "performance"].includes(mode)) loadPaper();
       if (mode === "health") loadHealth();
     })
   );
 }
 
 window.openPaperTrade = openPaperTrade;
-window.runAutoPaper = runAutoPaper;
 window.checkOptions = checkOptions;
 window.closePaperTrade = closePaperTrade;
+window.runAutoPaper = runAutoPaper;
 
 if ($("scanBtn")) $("scanBtn").addEventListener("click", () => runScan("scan"));
+if ($("scanBtnSide")) $("scanBtnSide").addEventListener("click", () => runScan("scan"));
 if ($("refreshBtn")) $("refreshBtn").addEventListener("click", () => runScan("scan"));
-if ($("topRefreshBtn")) $("topRefreshBtn").addEventListener("click", () => runScan("scan"));
-
 if ($("discoverBtn")) $("discoverBtn").addEventListener("click", () => runScan("discover"));
 if ($("dayBtn")) $("dayBtn").addEventListener("click", () => runScan("day"));
-
 if ($("paperBtn")) $("paperBtn").addEventListener("click", loadPaper);
-if ($("autoPaperBtn")) $("autoPaperBtn").addEventListener("click", runAutoPaper);
-if ($("topAutoPaperBtn")) $("topAutoPaperBtn").addEventListener("click", runAutoPaper);
-if ($("paperPanelAutoBtn")) $("paperPanelAutoBtn").addEventListener("click", runAutoPaper);
-
 if ($("runBacktest")) $("runBacktest").addEventListener("click", runBacktest);
+
+if ($("autoPaperBtn")) $("autoPaperBtn").addEventListener("click", runAutoPaper);
+if ($("autoPaperBtnSide")) $("autoPaperBtnSide").addEventListener("click", runAutoPaper);
+if ($("autoPaperMiniBtn")) $("autoPaperMiniBtn").addEventListener("click", runAutoPaper);
 
 if ($("clearSelect")) {
   $("clearSelect").addEventListener("click", () => {
