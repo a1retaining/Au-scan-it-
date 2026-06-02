@@ -9,7 +9,7 @@
 
 <body>
   <div class="tickerbar" id="tickerbar">
-    ASX AUTO SCANNER • AUTO PAPER TRADER ACTIVE • NO FAKE OPTION CHAINS • PAPER ONLY • AUD
+    ASX NEAR-LIVE PUBLIC CHART DATA • NO FAKE OPTION CHAINS • AUTO PAPER RULES • AUD
   </div>
 
   <div class="app-shell">
@@ -18,35 +18,36 @@
         <div class="brand-mark"><span>TRADING</span><strong>MINT</strong></div>
         <div>
           <h1>PRO ASX</h1>
-          <p>AUTOMATED TRADING SYSTEM</p>
+          <p>AUTOMATED PAPER SYSTEM</p>
         </div>
       </div>
 
-      <div class="build-tag">AU-ASX-REAL-V10-FULL-AUTO</div>
+      <div class="build-tag">AU-ASX-REAL-V8</div>
 
       <nav class="side-nav">
         <button class="nav active" data-mode="dashboard">▥ Dashboard</button>
         <button class="nav" data-mode="chart">▤ Chart</button>
         <button class="nav" data-mode="scan">⌕ Live scanner</button>
-        <button class="nav" data-mode="paper">⚙ Auto paper</button>
+        <button class="nav" data-mode="paper">⚙ Paper trader</button>
+        <button class="nav" data-mode="settings">⚙ Scanner settings</button>
         <button class="nav" data-mode="journal">▤ Trade journal</button>
         <button class="nav" data-mode="performance">▥ Performance</button>
-        <button class="nav" data-mode="settings">⚙ Scan settings</button>
         <button class="nav" data-mode="sectors">▥ Sector rotation</button>
+        <button class="nav" data-mode="backtest">◌ Backtest</button>
         <button class="nav" data-mode="health">⚙ System health</button>
       </nav>
 
       <div class="quick-card">
         <h3>Quick Actions</h3>
-        <button id="scanBtn">Run ASX Scan <span>AUTO</span></button>
-        <button id="autoPaperBtn">Auto Paper Trade <span>ON</span></button>
-        <button id="refreshBtn">Refresh Market <span>READY</span></button>
-        <button id="runBacktest">Run Backtest <span>READY</span></button>
+        <button id="scanBtnSide">Run Scan <span>READY</span></button>
+        <button id="autoPaperBtnSide">Auto Paper <span>RULES</span></button>
+        <button id="paperBtn">Paper Desk <span>LIVE</span></button>
+        <button id="refreshBtn">Refresh <span>READY</span></button>
       </div>
     </aside>
 
     <main class="main">
-      <header class="topbar ultra-compact-topbar">
+      <header class="topbar compact-topbar">
         <div>
           <p class="eyebrow">Australia-only scanner</p>
           <h2>TRADINGMINT PRO <span>ASX DESK</span></h2>
@@ -54,26 +55,62 @@
 
         <div class="top-actions">
           <button id="voiceBtn" class="secondary">Enable sound & voice</button>
-          <button id="topAutoPaperBtn" class="secondary">Auto Paper Now</button>
-          <button id="topRefreshBtn">Refresh</button>
+          <button id="scanBtn">Run ASX Scan</button>
+          <button id="autoPaperBtn">Auto Paper Trade</button>
         </div>
       </header>
 
-      <section class="thin-status card">
-        <div><span>Market</span><strong id="marketRegime">WAITING</strong></div>
-        <div><span>Trend</span><strong id="trendStat">SCANNING</strong></div>
-        <div><span>Signals</span><strong id="countStat">0</strong></div>
-        <div><span>A-grade</span><strong id="aGradeStat">0</strong></div>
-        <div><span>Sector</span><strong id="sectorStat">-</strong></div>
-        <div><span>Feed</span><strong class="live">PUBLIC 1M</strong></div>
-        <div><span>Updated</span><strong id="updatedStat">Waiting</strong></div>
+      <section class="session-strip card compact-strip" id="dashboardPanel">
+        <div class="session-main">
+          <span class="dot"></span>
+          <div>
+            <strong id="sessionState">ASX DATA</strong>
+            <small id="sessionTimer">Near-live public chart bars where available</small>
+          </div>
+        </div>
+
+        <div><span>Market Regime</span><strong id="marketRegime">WAITING</strong></div>
+        <div><span>ASX Trend</span><strong id="trendStat">SCANNING</strong></div>
+        <div><span>Sector Leader</span><strong id="sectorStat">-</strong></div>
+        <div><span>Data Feed</span><strong class="live">● PUBLIC</strong></div>
+        <div><span>Last Update</span><strong id="updatedStat">Waiting</strong></div>
+      </section>
+
+      <section class="metric-grid compact-metrics">
+        <article class="metric-card">
+          <div class="icon">↗</div>
+          <span>Market Regime</span>
+          <strong id="regimeCard">WAITING</strong>
+          <small id="regimeSub">Run scan</small>
+        </article>
+
+        <article class="metric-card">
+          <div class="icon">▥</div>
+          <span>Signals Found</span>
+          <strong id="countStat">0</strong>
+          <small>ASX public chart data</small>
+        </article>
+
+        <article class="metric-card">
+          <div class="icon">◉</div>
+          <span>Auto-Ready</span>
+          <strong id="aGradeStat">0</strong>
+          <small>Score 80+ and R:R 1.8+</small>
+        </article>
+
+        <article class="metric-card">
+          <div class="icon">⚙</div>
+          <span>Paper Rules</span>
+          <strong id="confidenceStat">WAITING</strong>
+          <small>Rule gate active</small>
+        </article>
       </section>
 
       <section class="card chart-card full-chart-row" id="chartPanel">
         <div class="chart-head">
           <div>
             <h3 id="chartTitle">ASX CANDLE CHART</h3>
-            <small id="chartMeta">Auto scanner selects the highest ranked stock. Paper entries, stops, targets and exits show on chart.</small>
+            <small id="chartMeta">Select a stock from the scanner. Paper entries, stops, targets and exits show here.</small>
           </div>
 
           <div class="timeframe-row">
@@ -88,15 +125,15 @@
           </div>
         </div>
 
-        <canvas id="chart" width="1500" height="620"></canvas>
+        <canvas id="chart" width="1500" height="560"></canvas>
       </section>
 
       <section class="dashboard-grid" id="scanPanel">
         <div class="card scanner-card">
           <div class="card-head">
             <div>
-              <h3>LIVE SCANNER <span>(ASX stocks ranked by quality)</span></h3>
-              <small id="meta">Auto scan starting...</small>
+              <h3>LIVE SCANNER <span>(Ranked by rule quality)</span></h3>
+              <small id="meta">No scan yet</small>
             </div>
             <button class="mini" id="clearSelect">Clear</button>
           </div>
@@ -125,29 +162,29 @@
           <div class="card detail-card" id="detail">
             <h3>TRADE DECISION STREAM</h3>
             <p class="muted">
-              Select a signal to inspect entry, stop, target, score breakdown and rule gate.
+              Select a signal to inspect entry, stop, target, score breakdown, rule gate and risk notes.
             </p>
           </div>
-        </aside>
-      </section>
 
-      <section class="card paper-card full-paper-row" id="paperPanel">
-        <div class="card-head">
-          <div>
-            <h3>FULL AUTO PAPER TRADING DESK</h3>
-            <small id="autoPaperStatus">Auto scanner and auto paper trader are active.</small>
+          <div class="card paper-card" id="paperPanel">
+            <div class="card-head">
+              <div>
+                <h3>Paper Trading Desk</h3>
+                <small>Only rule-approved trades should open automatically.</small>
+              </div>
+              <button class="mini" id="autoPaperMiniBtn">Auto</button>
+            </div>
+            <div id="paperStats" class="paper-grid">Loading...</div>
+            <pre id="autoPaperOutput" class="mini-output">Auto paper trader has not run yet.</pre>
           </div>
-          <button class="mini" id="paperPanelAutoBtn">Run Auto Now</button>
-        </div>
-
-        <div id="paperStats" class="paper-grid">Loading...</div>
+        </aside>
       </section>
 
       <section class="dashboard-grid lower" id="sectorsPanel">
         <div class="card indices">
           <h3>MARKET SNAPSHOT</h3>
           <div id="marketSnapshot" class="snapshot-list">
-            <p class="muted">Auto scan will populate this.</p>
+            <p class="muted">Run scan to populate.</p>
           </div>
         </div>
 
@@ -158,8 +195,13 @@
       </section>
 
       <section class="controls card settings-panel" id="settingsPanel">
+        <div class="settings-title">
+          <h3>Scanner Settings</h3>
+          <p class="muted">Set-and-forget list. Keep this lower down so it does not waste prime chart space.</p>
+        </div>
+
         <label>Symbols</label>
-        <textarea id="symbols" rows="2">CBA,BHP,CSL,NAB,WBC,ANZ,MQG,WES,WOW,TLS,RIO,FMG,WDS,GMG,ALL,QBE,SUN,XRO,REA,CAR,RMD,CPU,ASX,COL,TCL,BXB,S32,NST,NEM,ORG,STO,MIN,WTC,PME,SHL,COH,FPH,SEK,TWE,JHX,A2M,ALD,ALQ,ALU,AMC,APA,ARB,BEN,BOQ,BPT,BRG,BSL,CHC,DMP,EDV,EVN,FLT,GQG,IEL,IGO,ILU,JBH,LYC,MPL,NXT,ORI,PLS,RHC,SOL,TPG,VCX,VEA,WHC,WOR,YAL,ZIP,QAN,MGR,LLC,SGR</textarea>
+        <textarea id="symbols" rows="3">CBA,BHP,CSL,NAB,WBC,ANZ,MQG,WES,WOW,TLS,RIO,FMG,WDS,GMG,ALL,QBE,SUN,XRO,REA,CAR,RMD,CPU,ASX,COL,TCL,BXB,S32,NST,NEM,ORG,STO,MIN,WTC,PME,SHL,COH,FPH,SEK,TWE,JHX,A2M,ALD,ALQ,ALU,AMC,APA,ARB,BEN,BOQ,BPT,BRG,BSL,CHC,DMP,EDV,EVN,FLT,GQG,IEL,IGO,ILU,JBH,LYC,MPL,NXT,ORI,PLS,RHC,SOL,TPG,VCX,VEA,WHC,WOR,YAL,ZIP,QAN,MGR,LLC,SGR</textarea>
 
         <label>Sector</label>
         <select id="sector">
@@ -174,15 +216,17 @@
         </select>
 
         <button id="dayBtn" class="secondary">Day scan</button>
+        <button id="discoverBtn" class="secondary">Optimize Scan</button>
       </section>
 
-      <section class="dashboard-grid lower panels" id="healthPanel">
+      <section class="dashboard-grid lower panels" id="backtestPanel">
         <div class="card">
           <h3>Backtest / Notes</h3>
-          <pre id="backtestOutput">Auto paper results and backtest notes will show here.</pre>
+          <button id="runBacktest" class="secondary">Run Backtest</button>
+          <pre id="backtestOutput">Run backtest to populate.</pre>
         </div>
 
-        <div class="card health-card">
+        <div class="card health-card" id="healthPanel">
           <h3>System Health</h3>
           <pre id="systemHealth">Checking...</pre>
         </div>
