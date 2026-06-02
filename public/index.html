@@ -6,8 +6,12 @@
   <title>TradingMint PRO ASX</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
+
 <body>
-  <div class="tickerbar" id="tickerbar">ASX REAL PUBLIC DATA MODE • NO FAKE OPTION CHAINS • PAPER ONLY • AUD</div>
+  <div class="tickerbar" id="tickerbar">
+    ASX REAL PUBLIC DATA MODE • NO FAKE OPTION CHAINS • PAPER ONLY • AUD
+  </div>
+
   <div class="app-shell">
     <aside class="sidebar">
       <div class="brand-block">
@@ -17,10 +21,13 @@
           <p>AUTOMATED TRADING SYSTEM</p>
         </div>
       </div>
-      <div class="build-tag">AU-ASX-REAL-V7</div>
+
+      <div class="build-tag">AU-ASX-REAL-V8</div>
+
       <nav class="side-nav">
         <button class="nav active" data-mode="dashboard">▥ Dashboard</button>
         <button class="nav" data-mode="scan">⌕ Live scanner</button>
+        <button class="nav" data-mode="chart">▤ Chart</button>
         <button class="nav" data-mode="paper">⚙ Positions</button>
         <button class="nav" data-mode="journal">▤ Trade journal</button>
         <button class="nav" data-mode="performance">▥ Performance</button>
@@ -30,6 +37,7 @@
         <button class="nav" data-mode="risk">♢ Risk management</button>
         <button class="nav" data-mode="health">⚙ System health</button>
       </nav>
+
       <div class="quick-card">
         <h3>Quick Actions</h3>
         <button id="runBacktest">Run Backtest <span>READY</span></button>
@@ -40,22 +48,27 @@
     </aside>
 
     <main class="main">
-      <header class="topbar">
+      <header class="topbar compact-topbar">
         <div>
           <p class="eyebrow">Australia-only scanner</p>
           <h2>TRADINGMINT PRO <span>ASX DESK</span></h2>
         </div>
+
         <div class="top-actions">
           <button id="voiceBtn" class="secondary">Enable sound & voice</button>
           <button id="scanBtn">Run ASX Scan</button>
         </div>
       </header>
 
-      <section class="session-strip card">
+      <section class="session-strip card compact-strip">
         <div class="session-main">
           <span class="dot"></span>
-          <div><strong id="sessionState">ASX DATA</strong><small id="sessionTimer">Public delayed chart feed</small></div>
+          <div>
+            <strong id="sessionState">ASX DATA</strong>
+            <small id="sessionTimer">Public delayed chart feed</small>
+          </div>
         </div>
+
         <div><span>Market Regime</span><strong id="marketRegime">WAITING</strong></div>
         <div><span>ASX Trend</span><strong id="trendStat">SCANNING</strong></div>
         <div><span>Sector Leader</span><strong id="sectorStat">-</strong></div>
@@ -63,16 +76,40 @@
         <div><span>Last Update</span><strong id="updatedStat">Waiting</strong></div>
       </section>
 
-      <section class="metric-grid">
-        <article class="metric-card"><div class="icon">↗</div><span>Market Regime</span><strong id="regimeCard">WAITING</strong><small id="regimeSub">Run scan</small></article>
-        <article class="metric-card"><div class="icon">▥</div><span>Signals Found</span><strong id="countStat">0</strong><small>Real public ASX chart data</small></article>
-        <article class="metric-card"><div class="icon">◉</div><span>A-grade Setups</span><strong id="aGradeStat">0</strong><small>Score 78+</small></article>
-        <article class="metric-card"><div class="icon">76</div><span>System Confidence</span><strong id="confidenceStat">WAITING</strong><small>Environment</small></article>
+      <section class="metric-grid compact-metrics">
+        <article class="metric-card">
+          <div class="icon">↗</div>
+          <span>Market Regime</span>
+          <strong id="regimeCard">WAITING</strong>
+          <small id="regimeSub">Run scan</small>
+        </article>
+
+        <article class="metric-card">
+          <div class="icon">▥</div>
+          <span>Signals Found</span>
+          <strong id="countStat">0</strong>
+          <small>Real public ASX chart data</small>
+        </article>
+
+        <article class="metric-card">
+          <div class="icon">◉</div>
+          <span>A-grade Setups</span>
+          <strong id="aGradeStat">0</strong>
+          <small>Score 78+</small>
+        </article>
+
+        <article class="metric-card">
+          <div class="icon">76</div>
+          <span>System Confidence</span>
+          <strong id="confidenceStat">WAITING</strong>
+          <small>Environment</small>
+        </article>
       </section>
 
       <section class="controls card">
         <label>Symbols</label>
         <textarea id="symbols" rows="2">CBA,BHP,CSL,NAB,WBC,ANZ,MQG,WES,WOW,TLS,RIO,FMG,WDS,GMG,ALL,QBE,SUN,XRO,REA,CAR,RMD,CPU,ASX,COL,TCL,BXB,S32,NST,NEM,ORG,STO,MIN,WTC,PME,SHL,COH,FPH,SEK,TWE,JHX,A2M,ALD,ALQ,ALU,AMC,APA,ARB,BEN,BOQ,BPT,BRG,BSL,CHC,DMP,EDV,EVN,FLT,GQG,IEL,IGO,ILU,JBH,LYC,MPL,NXT,ORI,PLS,RHC,SOL,TPG,VCX,VEA,WHC,WOR,YAL,ZIP,QAN,MGR,LLC,SGR</textarea>
+
         <label>Sector</label>
         <select id="sector">
           <option value="">Default symbols</option>
@@ -84,41 +121,105 @@
           <option value="staples">Staples</option>
           <option value="industrials">Industrials</option>
         </select>
+
         <button id="dayBtn" class="secondary">Day scan</button>
       </section>
 
       <section class="dashboard-grid" id="scanPanel">
         <div class="card scanner-card">
-          <div class="card-head"><div><h3>LIVE SCANNER <span>(More ASX stocks, ranked by quality)</span></h3><small id="meta">No scan yet</small></div><button class="mini" id="clearSelect">Clear</button></div>
+          <div class="card-head">
+            <div>
+              <h3>LIVE SCANNER <span>(More ASX stocks, ranked by quality)</span></h3>
+              <small id="meta">No scan yet</small>
+            </div>
+            <button class="mini" id="clearSelect">Clear</button>
+          </div>
+
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Rank</th><th>Ticker</th><th>Setup</th><th>Score</th><th>R:R</th><th>Trend</th><th>Price</th><th>Entry area</th><th>Action</th></tr></thead>
+              <thead>
+                <tr>
+                  <th>Rank</th>
+                  <th>Ticker</th>
+                  <th>Setup</th>
+                  <th>Score</th>
+                  <th>R:R</th>
+                  <th>Trend</th>
+                  <th>Price</th>
+                  <th>Entry area</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
               <tbody id="signals"></tbody>
             </table>
           </div>
         </div>
 
         <aside class="right-stack sticky-trade-panel">
-          <div class="card detail-card" id="detail"><h3>TRADE DECISION STREAM</h3><p class="muted">Select a signal to inspect entry, stop, target, score breakdown and risk notes.</p></div>
-          <div class="card chart-card compact-chart">
-            <div class="card-head"><div><h3>ASX CANDLE CHART</h3><small id="chartMeta">Chart follows selected stock</small></div></div>
-            <canvas id="chart" width="820" height="360"></canvas>
+          <div class="card detail-card" id="detail">
+            <h3>TRADE DECISION STREAM</h3>
+            <p class="muted">
+              Select a signal to inspect entry, stop, target, score breakdown and risk notes.
+            </p>
           </div>
-          <div class="card paper-card" id="paperPanel"><h3>Paper Trading Desk</h3><div id="paperStats" class="paper-grid">Loading...</div></div>
+
+          <div class="card paper-card" id="paperPanel">
+            <h3>Paper Trading Desk</h3>
+            <div id="paperStats" class="paper-grid">Loading...</div>
+          </div>
         </aside>
       </section>
 
+      <section class="card chart-card full-chart-row" id="chartPanel">
+        <div class="chart-head">
+          <div>
+            <h3 id="chartTitle">ASX CANDLE CHART</h3>
+            <small id="chartMeta">Chart follows selected stock</small>
+          </div>
+
+          <div class="timeframe-row">
+            <button class="tf active" data-range="1d" data-interval="1m">1 Min</button>
+            <button class="tf" data-range="5d" data-interval="5m">5 Min</button>
+            <button class="tf" data-range="1mo" data-interval="15m">15 Min</button>
+            <button class="tf" data-range="3mo" data-interval="1h">1 Hour</button>
+            <button class="tf" data-range="1y" data-interval="1d">Day</button>
+            <button class="tf" data-range="2y" data-interval="1wk">Week</button>
+            <button class="tf" data-range="5y" data-interval="1mo">Month</button>
+            <button class="tf" data-range="10y" data-interval="1mo">Years</button>
+          </div>
+        </div>
+
+        <canvas id="chart" width="1400" height="550"></canvas>
+      </section>
+
       <section class="dashboard-grid lower" id="sectorsPanel">
-        <div class="card indices"><h3>MARKET SNAPSHOT</h3><div id="marketSnapshot" class="snapshot-list"><p class="muted">Run scan to populate.</p></div></div>
-        <div class="card heatmap"><h3>SECTOR ROTATION</h3><div id="heatmapGrid" class="heatmap-grid"></div></div>
+        <div class="card indices">
+          <h3>MARKET SNAPSHOT</h3>
+          <div id="marketSnapshot" class="snapshot-list">
+            <p class="muted">Run scan to populate.</p>
+          </div>
+        </div>
+
+        <div class="card heatmap">
+          <h3>SECTOR ROTATION</h3>
+          <div id="heatmapGrid" class="heatmap-grid"></div>
+        </div>
       </section>
 
       <section class="dashboard-grid lower panels" id="healthPanel">
-        <div class="card"><h3>System Health</h3><pre id="systemHealth">Checking...</pre></div>
-        <div class="card"><h3>Backtest / Notes</h3><pre id="backtestOutput">Run backtest to populate.</pre></div>
+        <div class="card">
+          <h3>Backtest / Notes</h3>
+          <pre id="backtestOutput">Run backtest to populate.</pre>
+        </div>
+
+        <div class="card health-card">
+          <h3>System Health</h3>
+          <pre id="systemHealth">Checking...</pre>
+        </div>
       </section>
     </main>
   </div>
+
   <div id="toast" class="toast hidden"></div>
   <script src="app.js"></script>
 </body>
