@@ -4,7 +4,7 @@ const fs = require("fs");
 
 const app = express();
 const PORT = process.env.PORT || 10000;
-const VERSION = "tradingmint-asx-real-v6-us-look-asx-real";
+const VERSION = "tradingmint-asx-real-v7-layout-paper-more-stocks";
 const publicPath = path.join(__dirname, "public");
 const dataPath = path.join(__dirname, "data");
 const tradesPath = path.join(dataPath, "paper-trades.json");
@@ -25,7 +25,11 @@ const DEFAULT_ASX_SYMBOLS = [
   "CBA.AX", "BHP.AX", "CSL.AX", "NAB.AX", "WBC.AX", "ANZ.AX", "MQG.AX", "WES.AX", "WOW.AX", "TLS.AX",
   "RIO.AX", "FMG.AX", "WDS.AX", "GMG.AX", "ALL.AX", "QBE.AX", "SUN.AX", "XRO.AX", "REA.AX", "CAR.AX",
   "RMD.AX", "CPU.AX", "ASX.AX", "COL.AX", "TCL.AX", "BXB.AX", "S32.AX", "NST.AX", "NEM.AX", "ORG.AX",
-  "STO.AX", "MIN.AX", "WTC.AX", "PME.AX", "SHL.AX", "COH.AX", "FPH.AX", "SEK.AX", "TWE.AX", "JHX.AX"
+  "STO.AX", "MIN.AX", "WTC.AX", "PME.AX", "SHL.AX", "COH.AX", "FPH.AX", "SEK.AX", "TWE.AX", "JHX.AX",
+  "A2M.AX", "ALD.AX", "ALQ.AX", "ALU.AX", "AMC.AX", "APA.AX", "ARB.AX", "BEN.AX", "BOQ.AX", "BPT.AX",
+  "BRG.AX", "BSL.AX", "CHC.AX", "DMP.AX", "EDV.AX", "EVN.AX", "FLT.AX", "GQG.AX", "IEL.AX", "IGO.AX",
+  "ILU.AX", "JBH.AX", "LYC.AX", "MPL.AX", "NXT.AX", "ORI.AX", "PLS.AX", "RHC.AX", "SOL.AX", "TPG.AX",
+  "VCX.AX", "VEA.AX", "WHC.AX", "WOR.AX", "YAL.AX", "ZIP.AX", "QAN.AX", "MGR.AX", "LLC.AX", "SGR.AX"
 ];
 
 const ASX_DISCOVERY_UNIVERSE = uniqueArray([
@@ -619,7 +623,7 @@ app.get("/api/scan", async (req, res) => {
   try {
     const sector = String(req.query.sector || "").toLowerCase();
     const base = sector && ASX_SECTORS[sector] ? ASX_SECTORS[sector] : uniqueSymbols(req.query.symbols || DEFAULT_ASX_SYMBOLS.join(","));
-    const result = await scanSymbols(base.slice(0, 100), req.query.risk || 100);
+    const result = await scanSymbols(base.slice(0, 160), req.query.risk || 100);
     result.sector = sector || "all/default";
     res.json(result);
   } catch (error) { res.status(500).json({ ok: false, version: VERSION, error: error.message, stack: process.env.NODE_ENV === "production" ? undefined : error.stack }); }
@@ -628,8 +632,8 @@ app.get("/api/scan", async (req, res) => {
 app.get("/api/discover", async (req, res) => {
   try {
     const exclude = new Set(uniqueSymbols(req.query.exclude || ""));
-    const scanLimit = Math.max(1, Math.min(ASX_DISCOVERY_UNIVERSE.length, Number(req.query.scanLimit || 80)));
-    const limit = Math.max(1, Math.min(80, Number(req.query.limit || 30)));
+    const scanLimit = Math.max(1, Math.min(ASX_DISCOVERY_UNIVERSE.length, Number(req.query.scanLimit || 160)));
+    const limit = Math.max(1, Math.min(120, Number(req.query.limit || 80)));
     const symbols = ASX_DISCOVERY_UNIVERSE.filter(symbol => !exclude.has(symbol)).slice(0, scanLimit);
     const result = await scanSymbols(symbols, req.query.risk || 100);
     result.discoveryUniverse = ASX_DISCOVERY_UNIVERSE.length;
@@ -644,7 +648,7 @@ app.get("/api/day-scan", async (req, res) => {
   try {
     const sector = String(req.query.sector || "").toLowerCase();
     const base = sector && ASX_SECTORS[sector] ? ASX_SECTORS[sector] : uniqueSymbols(req.query.symbols || DEFAULT_ASX_SYMBOLS.join(","));
-    res.json(await dayScanSymbols(base.slice(0, 80)));
+    res.json(await dayScanSymbols(base.slice(0, 120)));
   } catch (error) { res.status(500).json({ ok: false, version: VERSION, error: error.message }); }
 });
 

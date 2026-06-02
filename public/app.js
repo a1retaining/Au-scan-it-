@@ -183,7 +183,7 @@ async function runScan(mode = "scan") {
     toast("Running real ASX scan...");
     const sector = $("sector").value;
     const symbols = $("symbols").value;
-    const data = await getJson(endpoint(mode === "discover" ? "/api/discover" : mode === "day" ? "/api/day-scan" : "/api/scan", { symbols, sector, scanLimit: 100, limit: 40 }));
+    const data = await getJson(endpoint(mode === "discover" ? "/api/discover" : mode === "day" ? "/api/day-scan" : "/api/scan", { symbols, sector, scanLimit: 160, limit: 100 }));
     selectedSignal = null;
     renderSignals(data);
     toast("ASX scan complete");
@@ -208,19 +208,45 @@ async function checkOptions(symbol) {
   catch(e) { toast(e.message); }
 }
 async function loadPaper() {
-  try { const stats = await getJson("/api/paper/stats"); $("paperStats").textContent = JSON.stringify(stats, null, 2); }
-  catch(e){ $("paperStats").textContent = e.message; }
+  try {
+    const [stats, trades] = await Promise.all([getJson("/api/paper/stats"), getJson("/api/paper/trades")]);
+    const st = stats.stats || {};
+    const rows = (trades.trades || []).slice(0, 25);
+    $("paperStats").innerHTML = `<div class="paper-summary">
+      <div class="small-metric"><span>Closed trades</span><strong>${st.closedTrades || 0}</strong></div>
+      <div class="small-metric"><span>Win rate</span><strong>${num(st.winRate)}%</strong></div>
+      <div class="small-metric"><span>Net P/L</span><strong>${money(st.netPnl || 0)}</strong></div>
+      <div class="small-metric"><span>Open trades</span><strong>${rows.filter(t=>t.status==='open').length}</strong></div>
+    </div>
+    <div class="paper-trades">${rows.map(t => `<div class="paper-trade">
+      <div class="paper-trade-head"><strong>${shortSymbol(t.symbol)} ${String(t.status).toUpperCase()}</strong><small>${t.setup || 'manual'}</small></div>
+      <small>Entry ${money(t.entry)} | Shares ${t.shares} | Stop ${money(t.stop)} | Target ${money(t.target)}</small>
+      ${t.status === 'open' ? `<div class="paper-close-row"><input id="close-${t.id}" type="number" step="0.01" value="${t.entry}"><button class="mini" onclick="closePaperTrade('${t.id}')">Close</button></div>` : `<small>Exit ${money(t.exit)} | P/L ${money(t.pnl)} (${num(t.pnlPct)}%)</small>`}
+    </div>`).join('') || `<div class="paper-trade"><strong>No paper trades yet</strong><small>Click Paper Entry on a selected ASX signal.</small></div>`}</div>`;
+  } catch(e){ $("paperStats").innerHTML = `<p class="muted">${e.message}</p>`; }
+}
+async function closePaperTrade(id) {
+  const el = $("close-" + id);
+  const exit = el ? Number(el.value) : NaN;
+  try {
+    const response = await fetch("/api/paper/close", { method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify({ id, exit, exitReason:"manual close from dashboard" }) });
+    const json = await response.json();
+    if (!response.ok || json.ok === false) throw new Error(json.error || "Paper close failed");
+    toast("Paper trade closed");
+    loadPaper();
+  } catch(e) { toast(e.message); }
 }
 async function loadHealth() {
   try { const h = await getJson("/api/health"); $("systemHealth").textContent = JSON.stringify(h, null, 2); }
   catch(e){ $("systemHealth").textContent = e.message; }
 }
 async function runBacktest() {
-  try { toast("Running ASX backtest..."); const data = await getJson(endpoint("/api/backtest", { symbols: $("symbols").value, years: 5, account: 5000, risk: 50 })); $("systemHealth").textContent = JSON.stringify(data.stats || data, null, 2); toast("Backtest complete"); }
+  try { toast("Running ASX backtest..."); const data = await getJson(endpoint("/api/backtest", { symbols: $("symbols").value, years: 5, account: 5000, risk: 50 })); $("backtestOutput").textContent = JSON.stringify(data.stats || data, null, 2); toast("Backtest complete"); }
   catch(e){ toast(e.message); }
 }
 window.openPaperTrade = openPaperTrade;
 window.checkOptions = checkOptions;
+window.closePaperTrade = closePaperTrade;
 $("scanBtn").addEventListener("click", () => runScan("scan"));
 $("refreshBtn").addEventListener("click", () => runScan("scan"));
 $("discoverBtn").addEventListener("click", () => runScan("discover"));
@@ -229,4 +255,19 @@ $("paperBtn").addEventListener("click", loadPaper);
 $("runBacktest").addEventListener("click", runBacktest);
 $("clearSelect").addEventListener("click", () => { selectedSignal=null; renderDetail(null); });
 $("voiceBtn").addEventListener("click", () => { voiceEnabled = true; toast("Voice enabled"); speak("TradingMint ASX voice enabled"); });
+
+document.querySelectorAll(".nav").forEach(btn => btn.addEventListener("click", () => {
+  document.querySelectorAll(".nav").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  const mode = btn.dataset.mode || "dashboard";
+  const map = {
+    dashboard: "scanPanel", scan: "scanPanel", paper: "paperPanel", journal: "paperPanel", performance: "paperPanel",
+    backtest: "healthPanel", regime: "sectorsPanel", sectors: "sectorsPanel", risk: "paperPanel", health: "healthPanel"
+  };
+  const id = map[mode] || "scanPanel";
+  const el = $(id);
+  if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  if (["paper", "journal", "performance", "risk"].includes(mode)) loadPaper();
+  if (mode === "health") loadHealth();
+}));
 loadHealth(); loadPaper(); runScan("scan");

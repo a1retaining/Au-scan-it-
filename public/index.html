@@ -17,7 +17,7 @@
           <p>AUTOMATED TRADING SYSTEM</p>
         </div>
       </div>
-      <div class="build-tag">AU-ASX-REAL-V6</div>
+      <div class="build-tag">AU-ASX-REAL-V7</div>
       <nav class="side-nav">
         <button class="nav active" data-mode="dashboard">▥ Dashboard</button>
         <button class="nav" data-mode="scan">⌕ Live scanner</button>
@@ -72,7 +72,7 @@
 
       <section class="controls card">
         <label>Symbols</label>
-        <input id="symbols" value="CBA,BHP,CSL,NAB,WBC,ANZ,MQG,WES,WOW,RIO,FMG,XRO" />
+        <textarea id="symbols" rows="2">CBA,BHP,CSL,NAB,WBC,ANZ,MQG,WES,WOW,TLS,RIO,FMG,WDS,GMG,ALL,QBE,SUN,XRO,REA,CAR,RMD,CPU,ASX,COL,TCL,BXB,S32,NST,NEM,ORG,STO,MIN,WTC,PME,SHL,COH,FPH,SEK,TWE,JHX,A2M,ALD,ALQ,ALU,AMC,APA,ARB,BEN,BOQ,BPT,BRG,BSL,CHC,DMP,EDV,EVN,FLT,GQG,IEL,IGO,ILU,JBH,LYC,MPL,NXT,ORI,PLS,RHC,SOL,TPG,VCX,VEA,WHC,WOR,YAL,ZIP,QAN,MGR,LLC,SGR</textarea>
         <label>Sector</label>
         <select id="sector">
           <option value="">Default symbols</option>
@@ -87,9 +87,9 @@
         <button id="dayBtn" class="secondary">Day scan</button>
       </section>
 
-      <section class="dashboard-grid">
+      <section class="dashboard-grid" id="scanPanel">
         <div class="card scanner-card">
-          <div class="card-head"><div><h3>LIVE SCANNER <span>(Ranked by Quality)</span></h3><small id="meta">No scan yet</small></div><button class="mini" id="clearSelect">Clear</button></div>
+          <div class="card-head"><div><h3>LIVE SCANNER <span>(More ASX stocks, ranked by quality)</span></h3><small id="meta">No scan yet</small></div><button class="mini" id="clearSelect">Clear</button></div>
           <div class="table-wrap">
             <table>
               <thead><tr><th>Rank</th><th>Ticker</th><th>Setup</th><th>Score</th><th>R:R</th><th>Trend</th><th>Price</th><th>Entry area</th><th>Action</th></tr></thead>
@@ -98,23 +98,24 @@
           </div>
         </div>
 
-        <aside class="right-stack">
+        <aside class="right-stack sticky-trade-panel">
           <div class="card detail-card" id="detail"><h3>TRADE DECISION STREAM</h3><p class="muted">Select a signal to inspect entry, stop, target, score breakdown and risk notes.</p></div>
-          <div class="card indices"><h3>MARKET SNAPSHOT</h3><div id="marketSnapshot" class="snapshot-list"><p class="muted">Run scan to populate.</p></div></div>
+          <div class="card chart-card compact-chart">
+            <div class="card-head"><div><h3>ASX CANDLE CHART</h3><small id="chartMeta">Chart follows selected stock</small></div></div>
+            <canvas id="chart" width="820" height="360"></canvas>
+          </div>
+          <div class="card paper-card" id="paperPanel"><h3>Paper Trading Desk</h3><div id="paperStats" class="paper-grid">Loading...</div></div>
         </aside>
       </section>
 
-      <section class="dashboard-grid lower">
-        <div class="card chart-card">
-          <div class="card-head"><div><h3>ASX CANDLE CHART</h3><small id="chartMeta">Real public OHLCV chart data from backend</small></div></div>
-          <canvas id="chart" width="1100" height="420"></canvas>
-        </div>
+      <section class="dashboard-grid lower" id="sectorsPanel">
+        <div class="card indices"><h3>MARKET SNAPSHOT</h3><div id="marketSnapshot" class="snapshot-list"><p class="muted">Run scan to populate.</p></div></div>
         <div class="card heatmap"><h3>SECTOR ROTATION</h3><div id="heatmapGrid" class="heatmap-grid"></div></div>
       </section>
 
-      <section class="dashboard-grid lower panels">
-        <div class="card"><h3>Paper Account</h3><pre id="paperStats">Loading...</pre></div>
+      <section class="dashboard-grid lower panels" id="healthPanel">
         <div class="card"><h3>System Health</h3><pre id="systemHealth">Checking...</pre></div>
+        <div class="card"><h3>Backtest / Notes</h3><pre id="backtestOutput">Run backtest to populate.</pre></div>
       </section>
     </main>
   </div>
