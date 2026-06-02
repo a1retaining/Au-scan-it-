@@ -1,4 +1,4 @@
-# TradingMint ASX Real v2 Responsive Score
+# TradingMint ASX Real - v5 old look restored
 
 Australia-only ASX scanner built from your US backend idea, but cleaned so it does not fake unavailable data.
 
@@ -91,3 +91,8 @@ The v2 score now includes more responsive inputs:
 - scoreParts breakdown so you can see exactly why the score changed
 
 The app still uses real public ASX chart data only. It does not fabricate live prices or ASX options chains.
+
+
+## v4 restored command-centre UI
+
+This build restores the dark command-centre dashboard style from the uploaded old project notes, while keeping the ASX real-data backend and responsive score fixes. It does not use fake options-chain data.

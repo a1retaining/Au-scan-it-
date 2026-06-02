@@ -3,68 +3,114 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>TradingMint ASX Real</title>
+  <title>Traders Success Formula ASX</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <header>
-    <div>
-      <h1>TradingMint ASX Real</h1>
-      <p>Australia-only scanner. Public delayed data only. No fake options.</p>
-    </div>
-    <button id="scanBtn">Run ASX Scan</button>
-  </header>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="logo">ASX</div>
+        <div>
+          <h1>Traders Success Formula</h1>
+          <span>AU institutional desk</span>
+        </div>
+      </div>
+      <div class="build">AU-ASX-INSTITUTIONAL-DESK-V26</div>
+      <nav>
+        <button class="nav active" data-mode="scan">Signal scanner</button>
+        <button class="nav" data-mode="day">Day scan</button>
+        <button class="nav" data-mode="discover">Discovery</button>
+        <button class="nav" data-mode="paper">Paper account</button>
+        <button class="nav" data-mode="backtest">Backtest</button>
+      </nav>
+      <div class="lockbox">
+        <strong>Live money locked</strong>
+        <p>Paper-testing only. No broker execution. No fabricated ASX options chains.</p>
+      </div>
+    </aside>
 
-  <section class="controls">
-    <label>Symbols, comma separated</label>
-    <input id="symbols" value="CBA,BHP,CSL,NAB,WBC,ANZ,MQG,WES,WOW,RIO,FMG,XRO" />
-    <label>Sector</label>
-    <select id="sector">
-      <option value="">Default symbols</option>
-      <option value="banks">Banks</option>
-      <option value="miners">Miners</option>
-      <option value="energy">Energy</option>
-      <option value="healthcare">Healthcare</option>
-      <option value="tech">Tech</option>
-      <option value="staples">Staples</option>
-      <option value="industrials">Industrials</option>
-    </select>
-    <button id="dayBtn">Run Day Scan</button>
-    <button id="discoverBtn">Discover</button>
-    <button id="backtestBtn">Backtest</button>
-  </section>
+    <main class="desk">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Australia-only real data mode</p>
+          <h2>ASX signal desk</h2>
+        </div>
+        <div class="actions">
+          <button id="refreshBtn">Refresh scan</button>
+          <button id="voiceBtn" class="ghost">Enable sound & voice</button>
+        </div>
+      </header>
 
-  <section class="notice">
-    <strong>Data reality:</strong> this app uses public Yahoo Finance ASX chart data. Free ASX prices are normally delayed. The options route refuses to fabricate option chains.
-  </section>
+      <section class="stats">
+        <article><span>Market</span><strong id="marketStat">ASX</strong><small id="updatedStat">Waiting</small></article>
+        <article><span>Signals</span><strong id="countStat">0</strong><small>Real public chart feed</small></article>
+        <article><span>Best sector</span><strong id="sectorStat">-</strong><small>From returned signals</small></article>
+        <article><span>Paper equity</span><strong id="equityStat">$5,000</strong><small>AUD paper only</small></article>
+      </section>
 
-  <main>
-    <section class="panel wide">
-      <h2>Signals</h2>
-      <div id="meta"></div>
-      <table>
-        <thead>
-          <tr>
-            <th>Symbol</th><th>Score</th><th>Decision</th><th>Price</th><th>Buy Zone</th><th>Stop</th><th>Target</th><th>RR</th><th>Liquidity</th>
-          </tr>
-        </thead>
-        <tbody id="signals"></tbody>
-      </table>
-    </section>
+      <section class="controls card">
+        <label>Symbols</label>
+        <input id="symbols" value="CBA,BHP,CSL,NAB,WBC,ANZ,MQG,WES,WOW,RIO,FMG,XRO" />
+        <label>Sector</label>
+        <select id="sector">
+          <option value="">Default symbols</option>
+          <option value="banks">Banks</option>
+          <option value="miners">Miners</option>
+          <option value="energy">Energy</option>
+          <option value="healthcare">Healthcare</option>
+          <option value="tech">Tech</option>
+          <option value="staples">Staples</option>
+          <option value="industrials">Industrials</option>
+        </select>
+        <button id="scanBtn">Run ASX scan</button>
+        <button id="dayBtn" class="ghost">Day scan</button>
+        <button id="discoverBtn" class="ghost">Discover</button>
+      </section>
 
-    <section class="panel">
-      <h2>Selected</h2>
-      <pre id="selected">Click a row.</pre>
-      <button id="optionsBtn">Check ASX options availability</button>
-      <pre id="optionsOut"></pre>
-    </section>
-  </main>
+      <section class="grid">
+        <div class="card queue">
+          <div class="card-head"><h3>Priority queue</h3><span id="meta">No scan yet</span></div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Code</th><th>Score</th><th>Status</th><th>Setup</th><th>Price</th><th>Entry area</th><th>Stop</th><th>Target</th><th>R:R</th></tr>
+              </thead>
+              <tbody id="signals"></tbody>
+            </table>
+          </div>
+        </div>
 
-  <section class="panel">
-    <h2>Backtest / Errors</h2>
-    <pre id="output"></pre>
-  </section>
+        <aside class="card detail">
+          <div class="card-head"><h3>Selected setup</h3><button id="readBtn" class="mini">Read</button></div>
+          <div id="selected" class="setup-empty">Click a signal to inspect it.</div>
+          <div class="button-row">
+            <button id="optionsBtn" class="ghost">ASX options check</button>
+            <button id="paperOpenBtn" class="ghost">Paper enter</button>
+          </div>
+          <pre id="optionsOut"></pre>
+        </aside>
+      </section>
 
+      <section class="grid lower">
+        <div class="card chart-card">
+          <div class="card-head"><h3>Chart panel</h3><span id="chartMeta">Select a stock</span></div>
+          <canvas id="chart" width="900" height="360"></canvas>
+        </div>
+        <div class="card heatmap">
+          <div class="card-head"><h3>Heatmap</h3><span>Sector flow</span></div>
+          <div id="heatmapGrid" class="heatmap-grid"></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><h3>Backtest / system log</h3><button id="backtestBtn" class="mini">Run backtest</button></div>
+        <pre id="output">Ready. This frontend uses the backend API only. It does not display generated fallback trades or fake options.</pre>
+      </section>
+    </main>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
   <script src="app.js"></script>
 </body>
 </html>
