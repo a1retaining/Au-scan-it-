@@ -807,3 +807,26 @@ pre{
     grid-template-columns:1fr
   }
 }
+
+.full-paper-row {
+  margin-top: 16px;
+  padding: 16px;
+}
+
+.full-paper-row .paper-summary {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.full-paper-row .paper-trades {
+  max-height: 420px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+@media(max-width:900px) {
+  .full-paper-row .paper-summary,
+  .full-paper-row .paper-trades {
+    grid-template-columns: 1fr;
+  }
+}
