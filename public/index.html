@@ -9,7 +9,7 @@
 
 <body>
   <div class="tickerbar" id="tickerbar">
-    ASX REAL PUBLIC DATA MODE • NO FAKE OPTION CHAINS • PAPER ONLY • AUD
+    ASX PUBLIC 1-MIN CHART DATA WHERE AVAILABLE • NO FAKE OPTION CHAINS • PAPER ONLY • AUD
   </div>
 
   <div class="app-shell">
@@ -22,33 +22,31 @@
         </div>
       </div>
 
-      <div class="build-tag">AU-ASX-REAL-V8</div>
+      <div class="build-tag">AU-ASX-REAL-V8-AUTO</div>
 
       <nav class="side-nav">
         <button class="nav active" data-mode="dashboard">▥ Dashboard</button>
-        <button class="nav" data-mode="scan">⌕ Live scanner</button>
         <button class="nav" data-mode="chart">▤ Chart</button>
-        <button class="nav" data-mode="paper">⚙ Positions</button>
+        <button class="nav" data-mode="scan">⌕ Live scanner</button>
+        <button class="nav" data-mode="paper">⚙ Auto paper</button>
         <button class="nav" data-mode="journal">▤ Trade journal</button>
         <button class="nav" data-mode="performance">▥ Performance</button>
-        <button class="nav" data-mode="backtest">◌ Backtest analytics</button>
-        <button class="nav" data-mode="regime">▱ Market regime</button>
+        <button class="nav" data-mode="settings">⚙ Scan settings</button>
         <button class="nav" data-mode="sectors">▥ Sector rotation</button>
-        <button class="nav" data-mode="risk">♢ Risk management</button>
         <button class="nav" data-mode="health">⚙ System health</button>
       </nav>
 
       <div class="quick-card">
         <h3>Quick Actions</h3>
-        <button id="runBacktest">Run Backtest <span>READY</span></button>
-        <button id="discoverBtn">Optimize Scan <span>ON</span></button>
-        <button id="paperBtn">Paper Trading <span>LIVE</span></button>
+        <button id="scanBtn">Run ASX Scan <span>READY</span></button>
+        <button id="autoPaperBtn">Auto Paper Trade <span>RULES</span></button>
         <button id="refreshBtn">Refresh Market <span>READY</span></button>
+        <button id="runBacktest">Run Backtest <span>READY</span></button>
       </div>
     </aside>
 
     <main class="main">
-      <header class="topbar compact-topbar">
+      <header class="topbar ultra-compact-topbar">
         <div>
           <p class="eyebrow">Australia-only scanner</p>
           <h2>TRADINGMINT PRO <span>ASX DESK</span></h2>
@@ -56,80 +54,48 @@
 
         <div class="top-actions">
           <button id="voiceBtn" class="secondary">Enable sound & voice</button>
-          <button id="scanBtn">Run ASX Scan</button>
+          <button id="topAutoPaperBtn" class="secondary">Auto Paper</button>
+          <button id="topRefreshBtn">Refresh</button>
         </div>
       </header>
 
-      <section class="session-strip card compact-strip">
-        <div class="session-main">
-          <span class="dot"></span>
+      <section class="thin-status card">
+        <div><span>Market</span><strong id="marketRegime">WAITING</strong></div>
+        <div><span>Trend</span><strong id="trendStat">SCANNING</strong></div>
+        <div><span>Signals</span><strong id="countStat">0</strong></div>
+        <div><span>A-grade</span><strong id="aGradeStat">0</strong></div>
+        <div><span>Sector</span><strong id="sectorStat">-</strong></div>
+        <div><span>Feed</span><strong class="live">PUBLIC 1M</strong></div>
+        <div><span>Updated</span><strong id="updatedStat">Waiting</strong></div>
+      </section>
+
+      <section class="card chart-card full-chart-row" id="chartPanel">
+        <div class="chart-head">
           <div>
-            <strong id="sessionState">ASX DATA</strong>
-            <small id="sessionTimer">Public delayed chart feed</small>
+            <h3 id="chartTitle">ASX CANDLE CHART</h3>
+            <small id="chartMeta">Chart follows selected stock. Paper entries, stops, targets and exits show on chart.</small>
+          </div>
+
+          <div class="timeframe-row">
+            <button class="tf active" data-range="1d" data-interval="1m">1 Min</button>
+            <button class="tf" data-range="5d" data-interval="5m">5 Min</button>
+            <button class="tf" data-range="1mo" data-interval="15m">15 Min</button>
+            <button class="tf" data-range="3mo" data-interval="1h">1 Hour</button>
+            <button class="tf" data-range="1y" data-interval="1d">Day</button>
+            <button class="tf" data-range="2y" data-interval="1wk">Week</button>
+            <button class="tf" data-range="5y" data-interval="1mo">Month</button>
+            <button class="tf" data-range="10y" data-interval="1mo">Years</button>
           </div>
         </div>
 
-        <div><span>Market Regime</span><strong id="marketRegime">WAITING</strong></div>
-        <div><span>ASX Trend</span><strong id="trendStat">SCANNING</strong></div>
-        <div><span>Sector Leader</span><strong id="sectorStat">-</strong></div>
-        <div><span>Data Feed</span><strong class="live">● REAL</strong></div>
-        <div><span>Last Update</span><strong id="updatedStat">Waiting</strong></div>
-      </section>
-
-      <section class="metric-grid compact-metrics">
-        <article class="metric-card">
-          <div class="icon">↗</div>
-          <span>Market Regime</span>
-          <strong id="regimeCard">WAITING</strong>
-          <small id="regimeSub">Run scan</small>
-        </article>
-
-        <article class="metric-card">
-          <div class="icon">▥</div>
-          <span>Signals Found</span>
-          <strong id="countStat">0</strong>
-          <small>Real public ASX chart data</small>
-        </article>
-
-        <article class="metric-card">
-          <div class="icon">◉</div>
-          <span>A-grade Setups</span>
-          <strong id="aGradeStat">0</strong>
-          <small>Score 78+</small>
-        </article>
-
-        <article class="metric-card">
-          <div class="icon">76</div>
-          <span>System Confidence</span>
-          <strong id="confidenceStat">WAITING</strong>
-          <small>Environment</small>
-        </article>
-      </section>
-
-      <section class="controls card">
-        <label>Symbols</label>
-        <textarea id="symbols" rows="2">CBA,BHP,CSL,NAB,WBC,ANZ,MQG,WES,WOW,TLS,RIO,FMG,WDS,GMG,ALL,QBE,SUN,XRO,REA,CAR,RMD,CPU,ASX,COL,TCL,BXB,S32,NST,NEM,ORG,STO,MIN,WTC,PME,SHL,COH,FPH,SEK,TWE,JHX,A2M,ALD,ALQ,ALU,AMC,APA,ARB,BEN,BOQ,BPT,BRG,BSL,CHC,DMP,EDV,EVN,FLT,GQG,IEL,IGO,ILU,JBH,LYC,MPL,NXT,ORI,PLS,RHC,SOL,TPG,VCX,VEA,WHC,WOR,YAL,ZIP,QAN,MGR,LLC,SGR</textarea>
-
-        <label>Sector</label>
-        <select id="sector">
-          <option value="">Default symbols</option>
-          <option value="banks">Banks</option>
-          <option value="miners">Miners</option>
-          <option value="energy">Energy</option>
-          <option value="healthcare">Healthcare</option>
-          <option value="tech">Tech</option>
-          <option value="staples">Staples</option>
-          <option value="industrials">Industrials</option>
-        </select>
-
-        <button id="dayBtn" class="secondary">Day scan</button>
+        <canvas id="chart" width="1500" height="620"></canvas>
       </section>
 
       <section class="dashboard-grid" id="scanPanel">
         <div class="card scanner-card">
           <div class="card-head">
             <div>
-              <h3>LIVE SCANNER <span>(More ASX stocks, ranked by quality)</span></h3>
+              <h3>LIVE SCANNER <span>(ASX stocks ranked by quality)</span></h3>
               <small id="meta">No scan yet</small>
             </div>
             <button class="mini" id="clearSelect">Clear</button>
@@ -159,37 +125,21 @@
           <div class="card detail-card" id="detail">
             <h3>TRADE DECISION STREAM</h3>
             <p class="muted">
-              Select a signal to inspect entry, stop, target, score breakdown and risk notes.
+              Select a signal to inspect entry, stop, target, score breakdown and rule gate.
             </p>
           </div>
 
           <div class="card paper-card" id="paperPanel">
-            <h3>Paper Trading Desk</h3>
+            <div class="card-head">
+              <div>
+                <h3>Auto Paper Trading Desk</h3>
+                <small>Only enters trades that pass the rule gate.</small>
+              </div>
+              <button class="mini" id="paperPanelAutoBtn">Run Auto</button>
+            </div>
             <div id="paperStats" class="paper-grid">Loading...</div>
           </div>
         </aside>
-      </section>
-
-      <section class="card chart-card full-chart-row" id="chartPanel">
-        <div class="chart-head">
-          <div>
-            <h3 id="chartTitle">ASX CANDLE CHART</h3>
-            <small id="chartMeta">Chart follows selected stock</small>
-          </div>
-
-          <div class="timeframe-row">
-            <button class="tf active" data-range="1d" data-interval="1m">1 Min</button>
-            <button class="tf" data-range="5d" data-interval="5m">5 Min</button>
-            <button class="tf" data-range="1mo" data-interval="15m">15 Min</button>
-            <button class="tf" data-range="3mo" data-interval="1h">1 Hour</button>
-            <button class="tf" data-range="1y" data-interval="1d">Day</button>
-            <button class="tf" data-range="2y" data-interval="1wk">Week</button>
-            <button class="tf" data-range="5y" data-interval="1mo">Month</button>
-            <button class="tf" data-range="10y" data-interval="1mo">Years</button>
-          </div>
-        </div>
-
-        <canvas id="chart" width="1400" height="550"></canvas>
       </section>
 
       <section class="dashboard-grid lower" id="sectorsPanel">
@@ -204,6 +154,25 @@
           <h3>SECTOR ROTATION</h3>
           <div id="heatmapGrid" class="heatmap-grid"></div>
         </div>
+      </section>
+
+      <section class="controls card settings-panel" id="settingsPanel">
+        <label>Symbols</label>
+        <textarea id="symbols" rows="2">CBA,BHP,CSL,NAB,WBC,ANZ,MQG,WES,WOW,TLS,RIO,FMG,WDS,GMG,ALL,QBE,SUN,XRO,REA,CAR,RMD,CPU,ASX,COL,TCL,BXB,S32,NST,NEM,ORG,STO,MIN,WTC,PME,SHL,COH,FPH,SEK,TWE,JHX,A2M,ALD,ALQ,ALU,AMC,APA,ARB,BEN,BOQ,BPT,BRG,BSL,CHC,DMP,EDV,EVN,FLT,GQG,IEL,IGO,ILU,JBH,LYC,MPL,NXT,ORI,PLS,RHC,SOL,TPG,VCX,VEA,WHC,WOR,YAL,ZIP,QAN,MGR,LLC,SGR</textarea>
+
+        <label>Sector</label>
+        <select id="sector">
+          <option value="">Default symbols</option>
+          <option value="banks">Banks</option>
+          <option value="miners">Miners</option>
+          <option value="energy">Energy</option>
+          <option value="healthcare">Healthcare</option>
+          <option value="tech">Tech</option>
+          <option value="staples">Staples</option>
+          <option value="industrials">Industrials</option>
+        </select>
+
+        <button id="dayBtn" class="secondary">Day scan</button>
       </section>
 
       <section class="dashboard-grid lower panels" id="healthPanel">
