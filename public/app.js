@@ -11,6 +11,11 @@ let autoTraderInterval = null;
 let autoTraderCountdown = 60;
 let lastWarningText = "";
 
+let wakeLock = null;
+let keepAliveInterval = null;
+let hardRefreshInterval = null;
+let autoTraderBusy = false;
+
 const AUTO_SCAN_SECONDS = 60;
 const ASX_TIMEZONE = "Australia/Sydney";
 const ASX_OPEN_HOUR = 10;
@@ -1332,10 +1337,123 @@ function renderAutoWarnings() {
   }
 }
 
+async function requestWakeLock() {
+  try {
+    if (!("wakeLock" in navigator)) {
+      console.log("Wake Lock API is not supported in this browser.");
+      return;
+    }
+
+    if (wakeLock) return;
+
+    wakeLock = await navigator.wakeLock.request("screen");
+
+    wakeLock.addEventListener("release", () => {
+      wakeLock = null;
+      console.log("Screen wake lock released.");
+    });
+
+    console.log("Screen wake lock active.");
+  } catch (error) {
+    console.log("Wake lock failed:", error.message);
+  }
+}
+
+async function keepServerAwake() {
+  try {
+    const data = await getJson("/api/keepalive");
+
+    if ($("systemHealth")) {
+      const short = {
+        status: data.status,
+        serverTime: data.time,
+        uptimeSeconds: data.uptimeSeconds,
+        autoTrader: autoTraderOn ? "ON" : "OFF",
+        lastKeepAlive: new Date().toLocaleTimeString()
+      };
+
+      const current = $("systemHealth").textContent || "";
+
+      if (!current.includes("TradingMint ASX Real")) {
+        $("systemHealth").textContent = JSON.stringify(short, null, 2);
+      }
+    }
+
+    return true;
+  } catch (error) {
+    console.log("Keepalive failed:", error.message);
+    return false;
+  }
+}
+
+function startKeepAlive() {
+  if (keepAliveInterval) clearInterval(keepAliveInterval);
+
+  keepServerAwake();
+
+  keepAliveInterval = setInterval(async () => {
+    await keepServerAwake();
+
+    if (document.visibilityState === "visible") {
+      await requestWakeLock();
+    }
+  }, 60 * 1000);
+}
+
+function startHardRefreshLoop() {
+  if (hardRefreshInterval) clearInterval(hardRefreshInterval);
+
+  hardRefreshInterval = setInterval(async () => {
+    if (!autoTraderOn) return;
+    if (autoTraderBusy) return;
+
+    try {
+      autoTraderBusy = true;
+
+      await keepServerAwake();
+      await loadPaper();
+
+      if (document.visibilityState === "visible") {
+        renderAutoWarnings();
+
+        const hasOpenTrades = paperTradesCache.some((t) => t.status === "open");
+
+        if (hasOpenTrades || lastSignals.length === 0) {
+          await runScan("scan");
+        }
+
+        if (selectedSignal) {
+          await loadChart(selectedSignal.symbol);
+        }
+      }
+    } catch (error) {
+      console.log("Hard refresh loop failed:", error.message);
+    } finally {
+      autoTraderBusy = false;
+    }
+  }, 30 * 1000);
+}
+
+document.addEventListener("visibilitychange", async () => {
+  if (document.visibilityState === "visible") {
+    await requestWakeLock();
+    await keepServerAwake();
+    await loadPaper();
+
+    if (selectedSignal) {
+      await loadChart(selectedSignal.symbol);
+    }
+  }
+});
+
 async function autoTraderTick(forceRun = false) {
   if (!autoTraderOn && !forceRun) return;
+  if (autoTraderBusy) return;
 
   try {
+    autoTraderBusy = true;
+
+    await keepServerAwake();
     await runScan("scan");
     await loadPaper();
     renderAutoWarnings();
@@ -1347,8 +1465,14 @@ async function autoTraderTick(forceRun = false) {
       await loadPaper();
       renderAutoWarnings();
     }
+
+    if (selectedSignal) {
+      await loadChart(selectedSignal.symbol);
+    }
   } catch (e) {
     toast("Auto trader error: " + e.message);
+  } finally {
+    autoTraderBusy = false;
   }
 }
 
@@ -1478,6 +1602,10 @@ setupNav();
 
 updateMarketClock();
 setInterval(updateMarketClock, 1000);
+
+requestWakeLock();
+startKeepAlive();
+startHardRefreshLoop();
 
 loadHealth();
 loadPaper();
