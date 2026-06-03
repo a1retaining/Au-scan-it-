@@ -8,6 +8,8 @@ let paperTradesCache = [];
 let autoTraderOn = true;
 let autoTraderInterval = null;
 let autoTraderCountdown = 60;
+let lastWarningText = "";
+
 const AUTO_SCAN_SECONDS = 60;
 
 const $ = (id) => document.getElementById(id);
@@ -168,10 +170,16 @@ function renderHeatmap(signals) {
       rows
         .map(
           (r, i) =>
-            `<div class="tile"><strong>${i + 1} ${r.sector}</strong><span>${r.count} signals | strength ${Math.round(r.avg)}/100</span></div>`
+            `<div class="tile">
+              <strong>${i + 1} ${r.sector}</strong>
+              <span>${r.count} signals | strength ${Math.round(r.avg)}/100</span>
+            </div>`
         )
         .join("") ||
-      `<div class="tile"><strong>No sector data</strong><span>Run a scan first</span></div>`;
+      `<div class="tile">
+        <strong>No sector data</strong>
+        <span>Run a scan first</span>
+      </div>`;
   }
 
   if ($("sectorStat")) {
@@ -187,7 +195,10 @@ function renderSnapshot(signals) {
       ? top
           .map(
             (s) =>
-              `<div class="snapshot-item"><strong>${shortSymbol(s.symbol)}</strong><span>${num(s.changePercent)}% | ${s.score}/100</span></div>`
+              `<div class="snapshot-item">
+                <strong>${shortSymbol(s.symbol)}</strong>
+                <span>${num(s.changePercent)}% | ${s.score}/100</span>
+              </div>`
           )
           .join("")
       : `<p class="muted">Run scan to populate.</p>`;
@@ -213,13 +224,25 @@ function renderSignals(data) {
   const aGrades = lastSignals.filter((s) => Number(s.score || 0) >= 78).length;
   const autoReady = lastSignals.filter((s) => s.paperRules && s.paperRules.allowed).length;
 
-  if ($("marketRegime")) $("marketRegime").textContent = String(data.marketRegime || data.market || "ASX").toUpperCase();
-  if ($("trendStat")) $("trendStat").textContent = lastSignals.length && lastSignals[0] ? trendWord(lastSignals[0]) : "SCANNING";
+  if ($("marketRegime")) {
+    $("marketRegime").textContent = String(data.marketRegime || data.market || "ASX").toUpperCase();
+  }
+
+  if ($("trendStat")) {
+    $("trendStat").textContent = lastSignals.length && lastSignals[0] ? trendWord(lastSignals[0]) : "SCANNING";
+  }
+
   if ($("countStat")) $("countStat").textContent = String(lastSignals.length);
   if ($("aGradeStat")) $("aGradeStat").textContent = String(aGrades);
   if ($("confidenceStat")) $("confidenceStat").textContent = aGrades >= 3 ? "HIGH" : aGrades >= 1 ? "MEDIUM" : "LOW";
-  if ($("updatedStat")) $("updatedStat").textContent = data.updatedAt ? new Date(data.updatedAt).toLocaleTimeString() : "Updated";
-  if ($("regimeSub")) $("regimeSub").textContent = data.marketSource ? `Source: ${data.marketSource}` : "Rule-gated paper scan";
+
+  if ($("updatedStat")) {
+    $("updatedStat").textContent = data.updatedAt ? new Date(data.updatedAt).toLocaleTimeString() : "Updated";
+  }
+
+  if ($("regimeSub")) {
+    $("regimeSub").textContent = data.marketSource ? `Source: ${data.marketSource}` : "Rule-gated paper scan";
+  }
 
   if ($("meta")) {
     $("meta").textContent =
@@ -245,11 +268,17 @@ function renderSignals(data) {
             <td>${trend}</td>
             <td>${money(s.price)}</td>
             <td>${money(s.buyZoneLow)} - ${money(s.buyZoneHigh)}</td>
-            <td><span class="pill ${allowed === "YES" ? "enter" : decisionClass(s.decision)}">${allowed === "YES" ? "AUTO READY" : s.decision || "WATCH"}</span></td>
+            <td>
+              <span class="pill ${allowed === "YES" ? "enter" : decisionClass(s.decision)}">
+                ${allowed === "YES" ? "AUTO READY" : s.decision || "WATCH"}
+              </span>
+            </td>
           </tr>`;
         })
         .join("") ||
-      `<tr><td colspan="9">No valid signals returned. Bad or zero-price data is blocked instead of being shown.</td></tr>`;
+      `<tr>
+        <td colspan="9">No valid signals returned. Bad or zero-price data is blocked instead of being shown.</td>
+      </tr>`;
 
     document.querySelectorAll("#signals tr[data-symbol]").forEach((row) =>
       row.addEventListener("click", () => selectSignal(row.dataset.symbol))
@@ -279,7 +308,9 @@ function selectSignal(symbol, quiet = false) {
   }
 
   if (selectedSignal && !quiet) {
-    speak(`${shortSymbol(selectedSignal.symbol)} ${selectedSignal.setup}. Score ${selectedSignal.score}. Risk reward ${selectedSignal.riskReward}.`);
+    speak(
+      `${shortSymbol(selectedSignal.symbol)} ${selectedSignal.setup}. Score ${selectedSignal.score}. Risk reward ${selectedSignal.riskReward}.`
+    );
   }
 }
 
@@ -287,7 +318,10 @@ function renderRuleChecks(s) {
   const checks = s && s.paperRules && Array.isArray(s.paperRules.checks) ? s.paperRules.checks : [];
 
   if (!checks.length) {
-    return `<div class="snapshot-item"><strong>Rule gate</strong><span>No rule data</span></div>`;
+    return `<div class="snapshot-item">
+      <strong>Rule gate</strong>
+      <span>No rule data</span>
+    </div>`;
   }
 
   return checks
@@ -304,11 +338,13 @@ function renderRuleChecks(s) {
 function renderDetail(s) {
   if (!s) {
     $("detail").innerHTML =
-      `<h3>TRADE DECISION STREAM</h3><p class="muted">Select a signal to inspect entry, stop, target, score breakdown and rule gate.</p>`;
+      `<h3>TRADE DECISION STREAM</h3>
+      <p class="muted">Select a signal to inspect entry, stop, target, score breakdown and rule gate.</p>`;
     return;
   }
 
   const reasons = (s.reasons || []).slice(0, 5).map((x) => `<li>${x}</li>`).join("");
+
   const warnings =
     (s.warnings || []).slice(0, 5).map((x) => `<li>${x}</li>`).join("") ||
     `<li>No major warning returned by scanner.</li>`;
@@ -323,7 +359,10 @@ function renderDetail(s) {
   const gate = s.paperRules && s.paperRules.allowed ? "AUTO PAPER READY" : "RULES BLOCK";
 
   $("detail").innerHTML = `<h3>TRADE DECISION STREAM</h3>
-    <div class="detail-title">${shortSymbol(s.symbol)} <small>${s.setup || "ASX setup"} | ${gate}</small></div>
+    <div class="detail-title">
+      ${shortSymbol(s.symbol)}
+      <small>${s.setup || "ASX setup"} | ${gate}</small>
+    </div>
 
     <div class="metric-row">
       <div class="small-metric"><span>Entry area</span><strong>${money(s.buyZoneLow)} - ${money(s.buyZoneHigh)}</strong></div>
@@ -376,6 +415,7 @@ async function loadChart(symbol) {
     drawChart(selected, data.bars || selected.bars || [], data.source || selected.source || "public data");
   } catch (e) {
     drawChart(selected, selected.bars || [], selected.source || "public data");
+
     if ($("chartMeta")) {
       $("chartMeta").textContent = `${shortSymbol(selected.symbol)} | fallback chart | ${e.message}`;
     }
@@ -571,23 +611,65 @@ async function runAutoPaper() {
       throw new Error(json.error || "Auto paper failed");
     }
 
+    const openedHtml = (json.opened || [])
+      .map(
+        (t) => `<div class="paper-trade">
+          <div class="paper-trade-head">
+            <strong>${shortSymbol(t.symbol)} AUTO OPENED</strong>
+            <small>${t.setup}</small>
+          </div>
+          <small>Entry ${money(t.entry)} | Stop ${money(t.stop)} | Target ${money(t.target)} | R:R ${num(t.riskReward)}</small>
+        </div>`
+      )
+      .join("");
+
+    const blockedHtml = (json.blocked || [])
+      .slice(0, 12)
+      .map(
+        (b) => `<div class="paper-trade warning-card">
+          <div class="paper-trade-head">
+            <strong>${shortSymbol(b.symbol)} BLOCKED</strong>
+            <small>Auto paper</small>
+          </div>
+          <small>${b.reason || "Blocked by rule gate."}</small>
+        </div>`
+      )
+      .join("");
+
+    const candidateHtml = (json.topCandidates || [])
+      .slice(0, 8)
+      .map(
+        (c) => `<div class="paper-trade">
+          <div class="paper-trade-head">
+            <strong>${shortSymbol(c.symbol)} CANDIDATE</strong>
+            <small>${c.setup || "Setup"}</small>
+          </div>
+          <small>Score ${c.score} | R:R ${num(c.riskReward)} | Price ${money(c.price)} | Entry ${money(c.buyZoneLow)} - ${money(c.buyZoneHigh)}</small>
+        </div>`
+      )
+      .join("");
+
     if ($("autoPaperOutput")) {
       $("autoPaperOutput").innerHTML = `<div class="snapshot-list">
-        <div class="snapshot-item"><strong>Opened</strong><span>${json.openedCount || 0}</span></div>
-        <div class="snapshot-item"><strong>Blocked</strong><span>${json.blockedCount || 0}</span></div>
+        <div class="snapshot-item"><strong>Opened this run</strong><span>${json.openedCount || 0}</span></div>
+        <div class="snapshot-item"><strong>Blocked this run</strong><span>${json.blockedCount || 0}</span></div>
+        <div class="snapshot-item"><strong>Scanned</strong><span>${json.scanned || 0}</span></div>
         <div class="snapshot-item"><strong>Rules</strong><span>Score 80+ / R:R 1.8+</span></div>
       </div>
+
+      <h4>Opened</h4>
       <div class="paper-trades">
-        ${
-          (json.opened || [])
-            .map(
-              (t) => `<div class="paper-trade">
-                <div class="paper-trade-head"><strong>${shortSymbol(t.symbol)} AUTO OPENED</strong><small>${t.setup}</small></div>
-                <small>Entry ${money(t.entry)} | Stop ${money(t.stop)} | Target ${money(t.target)} | R:R ${num(t.riskReward)}</small>
-              </div>`
-            )
-            .join("") || `<div class="paper-trade"><strong>No trades opened</strong><small>No setup passed all auto-paper rules.</small></div>`
-        }
+        ${openedHtml || `<div class="paper-trade"><strong>No trades opened</strong><small>No setup was actually entered this run.</small></div>`}
+      </div>
+
+      <h4>Blocked / skipped</h4>
+      <div class="paper-trades">
+        ${blockedHtml || `<div class="paper-trade"><strong>No blocked details</strong><small>The backend did not return block reasons.</small></div>`}
+      </div>
+
+      <h4>Top candidates</h4>
+      <div class="paper-trades">
+        ${candidateHtml || `<div class="paper-trade"><strong>No candidates</strong><small>No symbols passed the candidate filter.</small></div>`}
       </div>`;
     }
 
@@ -597,11 +679,14 @@ async function runAutoPaper() {
       toast(msg);
       speak(msg);
     } else {
-      toast("Auto paper complete. No trades opened.");
+      toast("Auto paper complete. No trades opened. Check blocked reasons.");
     }
 
     await loadPaper();
-    await runScan("scan");
+
+    if (selectedSignal) {
+      await loadChart(selectedSignal.symbol);
+    }
   } catch (e) {
     toast(e.message);
 
@@ -822,9 +907,9 @@ function warnBeforeEntries() {
   }
 
   return near.map((s) => ({
-    type: "ENTRY WARNING",
+    type: "NEAR ENTRY",
     symbol: s.symbol,
-    text: `${shortSymbol(s.symbol)} is getting close to auto entry. Score ${s.score}, R:R ${num(s.riskReward)}, distance ${num(s.distanceToBuyZonePct)}%.`
+    text: `${shortSymbol(s.symbol)} is near the auto-entry zone, but has not entered yet. Score ${s.score}, R:R ${num(s.riskReward)}, distance ${num(s.distanceToBuyZonePct)}%.`
   }));
 }
 
@@ -873,8 +958,6 @@ function warnBeforeExits() {
   return warnings;
 }
 
-let lastWarningText = "";
-
 function renderAutoWarnings() {
   const entry = warnBeforeEntries();
   const exit = warnBeforeExits();
@@ -886,17 +969,20 @@ function renderAutoWarnings() {
     ? all
         .map(
           (w) => `
-      <div class="paper-trade warning-card">
-        <div class="paper-trade-head">
-          <strong>${w.type}</strong>
-          <small>${shortSymbol(w.symbol)}</small>
-        </div>
-        <small>${w.text}</small>
-      </div>
-    `
+          <div class="paper-trade warning-card">
+            <div class="paper-trade-head">
+              <strong>${w.type}</strong>
+              <small>${shortSymbol(w.symbol)}</small>
+            </div>
+            <small>${w.text}</small>
+          </div>
+        `
         )
         .join("")
-    : `<div class="paper-trade"><strong>No near-entry or near-exit warnings</strong><small>Auto trader is monitoring.</small></div>`;
+    : `<div class="paper-trade">
+        <strong>No near-entry or near-exit warnings</strong>
+        <small>Auto trader is monitoring.</small>
+      </div>`;
 
   if (all.length) {
     const first = all[0].text;
