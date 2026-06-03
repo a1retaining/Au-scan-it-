@@ -11,6 +11,9 @@ let autoTraderCountdown = 60;
 let lastWarningText = "";
 
 const AUTO_SCAN_SECONDS = 60;
+const ASX_TIMEZONE = "Australia/Sydney";
+const ASX_OPEN_HOUR = 10;
+const ASX_CLOSE_HOUR = 16;
 
 const $ = (id) => document.getElementById(id);
 
@@ -89,6 +92,14 @@ function scoreClass(score) {
   return "bad";
 }
 
+function pnlClass(value) {
+  const n = Number(value || 0);
+
+  if (n > 0) return "profit-good";
+  if (n < 0) return "profit-bad";
+  return "profit-flat";
+}
+
 function decisionClass(decision) {
   const d = String(decision || "");
 
@@ -151,6 +162,112 @@ function signalSector(symbol) {
   if (["WOW", "COL", "WES", "A2M", "TWE", "EDV"].includes(s)) return "Staples";
 
   return "Other";
+}
+
+function getSydneyParts(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-AU", {
+    timeZone: ASX_TIMEZONE,
+    weekday: "short",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23"
+  }).formatToParts(date);
+
+  const out = {};
+
+  for (const p of parts) {
+    if (p.type !== "literal") out[p.type] = p.value;
+  }
+
+  return {
+    weekday: out.weekday,
+    year: Number(out.year),
+    month: Number(out.month),
+    day: Number(out.day),
+    hour: Number(out.hour),
+    minute: Number(out.minute),
+    second: Number(out.second)
+  };
+}
+
+function getSydneyOffsetMinutes(date = new Date()) {
+  const parts = getSydneyParts(date);
+  const asUtc = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second);
+  return Math.round((asUtc - date.getTime()) / 60000);
+}
+
+function makeSydneyTime(year, month, day, hour, minute = 0, second = 0) {
+  const guessUtc = Date.UTC(year, month - 1, day, hour, minute, second);
+  const offset = getSydneyOffsetMinutes(new Date(guessUtc));
+  return new Date(guessUtc - offset * 60000);
+}
+
+function nextSydneyTradingOpen(from = new Date()) {
+  const p = getSydneyParts(from);
+  let y = p.year;
+  let m = p.month;
+  let d = p.day;
+
+  for (let i = 0; i < 10; i++) {
+    const candidate = makeSydneyTime(y, m, d + i, ASX_OPEN_HOUR, 0, 0);
+    const cp = getSydneyParts(candidate);
+    const weekdayNum = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(cp.weekday);
+
+    if (weekdayNum >= 1 && weekdayNum <= 5 && candidate > from) {
+      return candidate;
+    }
+  }
+
+  return makeSydneyTime(y, m, d + 1, ASX_OPEN_HOUR, 0, 0);
+}
+
+function formatCountdown(ms) {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (days > 0) return `${days}d ${hours}h ${minutes}m`;
+  if (hours > 0) return `${hours}h ${minutes}m ${seconds}s`;
+  return `${minutes}m ${seconds}s`;
+}
+
+function updateMarketClock() {
+  const now = new Date();
+  const parts = getSydneyParts(now);
+  const weekdayNum = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(parts.weekday);
+  const isWeekday = weekdayNum >= 1 && weekdayNum <= 5;
+
+  const openTime = makeSydneyTime(parts.year, parts.month, parts.day, ASX_OPEN_HOUR, 0, 0);
+  const closeTime = makeSydneyTime(parts.year, parts.month, parts.day, ASX_CLOSE_HOUR, 0, 0);
+
+  let state = "ASX CLOSED";
+  let timerText = "";
+  let isOpen = false;
+
+  if (isWeekday && now >= openTime && now < closeTime) {
+    isOpen = true;
+    state = "ASX OPEN";
+    timerText = `Closes in ${formatCountdown(closeTime - now)}`;
+  } else {
+    const nextOpen = now < openTime && isWeekday ? openTime : nextSydneyTradingOpen(now);
+    state = "ASX CLOSED";
+    timerText = `Opens in ${formatCountdown(nextOpen - now)}`;
+  }
+
+  if ($("sessionState")) {
+    $("sessionState").textContent = state;
+    $("sessionState").classList.toggle("live", isOpen);
+  }
+
+  if ($("sessionTimer")) {
+    $("sessionTimer").textContent = timerText;
+  }
 }
 
 function renderHeatmap(signals) {
@@ -513,7 +630,7 @@ function drawChart(s, incomingBars, sourceLabel) {
     ctx.fillRect(xx - bw / 2, Math.min(open, close), bw, Math.max(2, Math.abs(close - open)));
   });
 
-  function line(val, color, label) {
+  function line(val, color, label, width = 1.25) {
     if (!isGoodNumber(val) || Number(val) <= 0) return;
 
     const yy = y(Number(val));
@@ -521,7 +638,7 @@ function drawChart(s, incomingBars, sourceLabel) {
     ctx.save();
     ctx.strokeStyle = color;
     ctx.fillStyle = color;
-    ctx.lineWidth = 1.25;
+    ctx.lineWidth = width;
     ctx.setLineDash([7, 6]);
 
     ctx.beginPath();
@@ -535,6 +652,27 @@ function drawChart(s, incomingBars, sourceLabel) {
     ctx.restore();
   }
 
+  function badge(val, color, text, alignRight = false) {
+    if (!isGoodNumber(val) || Number(val) <= 0) return;
+
+    const yy = y(Number(val));
+    ctx.save();
+    ctx.font = "bold 13px sans-serif";
+    const padX = 8;
+    const textWidth = ctx.measureText(text).width;
+    const boxW = textWidth + padX * 2;
+    const boxH = 24;
+    const xx = alignRight ? W - rightPad - boxW : leftPad;
+
+    ctx.fillStyle = color;
+    ctx.globalAlpha = 0.92;
+    ctx.fillRect(xx, yy - boxH / 2, boxW, boxH);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText(text, xx + padX, yy + 5);
+    ctx.restore();
+  }
+
   line(s.buyZoneHigh, "#42e8ff", "Entry high");
   line(s.buyZoneLow, "#4ea1ff", "Entry low");
   line(s.stopLoss, "#ff5d5d", "Stop");
@@ -543,12 +681,19 @@ function drawChart(s, incomingBars, sourceLabel) {
   const trades = getTradesForSymbol(s.symbol);
 
   trades.forEach((t) => {
-    line(t.entry, "#42e8ff", "Paper entry");
-    line(t.stop, "#ff5d5d", "Paper stop");
-    line(t.target, "#34f59b", "Paper target");
+    line(t.entry, "#42e8ff", "PAPER ENTRY", 2.2);
+    line(t.stop, "#ff5d5d", "PAPER STOP", 1.8);
+    line(t.target, "#34f59b", "PAPER TARGET", 1.8);
+    badge(t.entry, "#1c79ff", "ENTRY " + money(t.entry), false);
 
     if (isGoodNumber(t.exit) && Number(t.exit) > 0) {
-      line(t.exit, "#ffc857", "Paper exit");
+      line(t.exit, "#ffc857", "PAPER EXIT", 2.2);
+      badge(t.exit, "#ffc857", "EXIT " + money(t.exit), true);
+    }
+
+    if (t.status === "closed" && isGoodNumber(t.pnl)) {
+      const label = "NET P/L " + signedMoney(t.pnl);
+      badge(t.exit || t.entry, Number(t.pnl) >= 0 ? "#23c983" : "#ff5d5d", label, true);
     }
   });
 
@@ -562,7 +707,7 @@ function drawChart(s, incomingBars, sourceLabel) {
 
   if ($("chartMeta")) {
     $("chartMeta").textContent =
-      `${shortSymbol(s.symbol)} | ${bars.length} bars | ${currentRange} / ${currentInterval} | Entries, stops, targets and paper trades`;
+      `${shortSymbol(s.symbol)} | ${bars.length} bars | ${currentRange} / ${currentInterval} | Entry, exit, stop, target and paper profit markers`;
   }
 }
 
@@ -626,6 +771,9 @@ async function runAutoPaper() {
             <strong>${shortSymbol(t.symbol)} AUTO OPENED</strong>
             <small>${t.setup}</small>
           </div>
+          <div class="trade-profit ${pnlClass(t.targetProfit)}">
+            TARGET PROFIT AFTER FEES: <strong>${signedMoney(t.targetProfit)}</strong>
+          </div>
           <small>Trade value ${money(t.tradeValue)} | Shares ${t.shares} | Entry fee ${money(t.entryBrokerFee)} | Cash committed ${money(t.cashCommitted)}</small>
           <small>Risk after fees ${money(t.riskAmount)} | Target reward after fees ${money(t.targetProfit)}</small>
         </div>`
@@ -686,7 +834,7 @@ async function runAutoPaper() {
 
     if (Number(json.openedCount || 0) > 0) {
       const first = json.opened[0];
-      const msg = `${shortSymbol(first.symbol)} auto paper trade opened. Trade value ${money(first.tradeValue)}, brokerage ${money(first.entryBrokerFee)}, cash left ${money(account.cashAvailable)}.`;
+      const msg = `${shortSymbol(first.symbol)} auto paper trade opened. Target profit after fees ${signedMoney(first.targetProfit)}, cash left ${money(account.cashAvailable)}.`;
       toast(msg);
       speak(msg);
     } else {
@@ -749,7 +897,7 @@ async function openPaperTrade(symbol) {
 
     const account = json.account || {};
     const trade = json.trade || {};
-    toast(`Paper trade opened for ${shortSymbol(symbol)}. Trade value ${money(trade.tradeValue)}, fee ${money(trade.entryBrokerFee)}, cash left ${money(account.cashAvailable)}.`);
+    toast(`Paper trade opened for ${shortSymbol(symbol)}. Target profit after fees ${signedMoney(trade.targetProfit)}, cash left ${money(account.cashAvailable)}.`);
 
     await loadPaper();
 
@@ -789,8 +937,8 @@ function renderPaperAccount(stats, trades) {
       <div class="small-metric"><span>Cash committed</span><strong>${money(st.cashCommittedToOpenTrades)}</strong></div>
       <div class="small-metric"><span>Account equity</span><strong>${money(st.accountEquity)}</strong></div>
       <div class="small-metric"><span>Open risk after fees</span><strong>${money(st.openRisk)}</strong></div>
-      <div class="small-metric"><span>Target reward after fees</span><strong>${money(st.openTargetReward)}</strong></div>
-      <div class="small-metric"><span>Realised net P/L</span><strong>${signedMoney(st.realisedPnl || st.netPnl || 0)}</strong></div>
+      <div class="small-metric"><span>Target profit after fees</span><strong class="${pnlClass(st.openTargetReward)}">${signedMoney(st.openTargetReward)}</strong></div>
+      <div class="small-metric"><span>Realised net P/L</span><strong class="${pnlClass(st.realisedPnl || st.netPnl || 0)}">${signedMoney(st.realisedPnl || st.netPnl || 0)}</strong></div>
       <div class="small-metric"><span>Broker fee each trade</span><strong>${money(st.brokerFeePerTrade || 9.5)}</strong></div>
       <div class="small-metric"><span>Open entry fees</span><strong>${money(st.openEntryBrokerFees)}</strong></div>
       <div class="small-metric"><span>Est. open exit fees</span><strong>${money(st.estimatedOpenExitFees)}</strong></div>
@@ -808,11 +956,15 @@ function renderPaperAccount(stats, trades) {
                 <small>${t.setup || "paper trade"}</small>
               </div>
 
+              <div class="trade-profit ${pnlClass(t.targetProfit)}">
+                TARGET PROFIT AFTER FEES: <strong>${signedMoney(t.targetProfit)}</strong>
+              </div>
+
               <small>Entry ${money(t.entry)} | Shares ${t.shares} | Trade value ${money(t.tradeValue || t.capitalUsed)}</small>
               <small>Entry fee ${money(t.entryBrokerFee)} | Est. exit fee ${money(t.estimatedExitBrokerFee)} | Cash committed ${money(t.cashCommitted)}</small>
               <small>Stop ${money(t.stop)} | Target ${money(t.target)}</small>
-              <small>Risk after fees ${money(t.riskAmount)} | Target reward after fees ${money(t.targetProfit)}</small>
-              <small>R:R ${num(t.riskReward)} | Account used ${num(t.accountUsedPct)}% | Account risk ${num(t.accountRiskPct)}%</small>
+              <small>Risk after fees ${money(t.riskAmount)} | R:R ${num(t.riskReward)}</small>
+              <small>Account used ${num(t.accountUsedPct)}% | Account risk ${num(t.accountRiskPct)}%</small>
 
               <div class="paper-close-row">
                 <input id="close-${t.id}" type="number" step="0.01" value="${t.entry}">
@@ -839,6 +991,11 @@ function renderPaperAccount(stats, trades) {
                 <strong>${shortSymbol(t.symbol)} CLOSED</strong>
                 <small>${t.exitReason || "closed"}</small>
               </div>
+
+              <div class="trade-profit ${pnlClass(t.pnl)}">
+                NET PROFIT AFTER FEES: <strong>${signedMoney(t.pnl)}</strong>
+              </div>
+
               <small>Entry ${money(t.entry)} | Exit ${money(t.exit)} | Shares ${t.shares}</small>
               <small>Trade value ${money(t.tradeValue || t.capitalUsed)} | Gross P/L ${signedMoney(t.grossPnl)}</small>
               <small>Broker fees ${money(t.totalBrokerFees)} | Net P/L ${signedMoney(t.pnl)} (${num(t.pnlPct)}%)</small>
@@ -901,7 +1058,7 @@ async function closePaperTrade(id) {
 
     const account = json.account || {};
     const trade = json.trade || {};
-    toast(`Paper trade closed. Net P/L ${signedMoney(trade.pnl)} after fees. Cash available ${money(account.cashAvailable)}.`);
+    toast(`Paper trade closed. Net profit after fees ${signedMoney(trade.pnl)}. Cash available ${money(account.cashAvailable)}.`);
 
     await loadPaper();
 
@@ -1208,6 +1365,9 @@ if ($("voiceBtn")) {
 
 setupTimeframeButtons();
 setupNav();
+
+updateMarketClock();
+setInterval(updateMarketClock, 1000);
 
 loadHealth();
 loadPaper();
