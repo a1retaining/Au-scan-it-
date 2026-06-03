@@ -4,7 +4,7 @@ const fs = require("fs");
 
 const app = express();
 const PORT = process.env.PORT || 10000;
-const VERSION = "tradingmint-asx-real-v10-paper-account-ledger";
+const VERSION = "tradingmint-asx-real-v11-brokerage-min-500";
 
 const publicPath = path.join(__dirname, "public");
 const dataPath = path.join(__dirname, "data");
@@ -26,7 +26,8 @@ const ASX_CONFIG = {
 
 const PAPER_ACCOUNT = {
   startingBalance: 5000,
-  currency: "AUD"
+  currency: "AUD",
+  brokerFeePerTrade: 9.5
 };
 
 const PAPER_RULES = {
@@ -35,7 +36,8 @@ const PAPER_RULES = {
   minRiskReward: 1.8,
   maxOpenTrades: 5,
   maxAutoEntriesPerRun: 2,
-  maxTradeValue: 500,
+  minTradeValue: 500,
+  maxTradeValue: 1000,
   riskDollars: 50,
   allowShorts: false,
   requireBullishTrend: true,
@@ -433,6 +435,57 @@ async function getBars(symbol, range = "1y", interval = "1d") {
   return result;
 }
 
+function evaluateSignalForPaperTrade(signal) {
+  const score = Number(signal.score || 0);
+  const rr = Number(signal.riskReward || 0);
+  const price = Number(signal.price || 0);
+  const buyZoneHigh = Number(signal.buyZoneHigh || 0);
+  const distance = Number(signal.distanceToBuyZonePct || 0);
+  const change5 = Number(signal.change5dPct || 0);
+  const change20 = Number(signal.change20dPct || 0);
+
+  const checks = [
+    {
+      name: "Score",
+      pass: score >= PAPER_RULES.minScore,
+      actual: score,
+      required: PAPER_RULES.minScore
+    },
+    {
+      name: "Risk reward",
+      pass: rr >= PAPER_RULES.minRiskReward,
+      actual: round(rr, 2),
+      required: PAPER_RULES.minRiskReward
+    },
+    {
+      name: "Trend",
+      pass: !PAPER_RULES.requireBullishTrend || (change5 >= 0 && change20 >= 0),
+      actual: `${round(change5, 2)}% / ${round(change20, 2)}%`,
+      required: "5D and 20D not negative"
+    },
+    {
+      name: "Buy zone distance",
+      pass:
+        !PAPER_RULES.requireNearBuyZone ||
+        !Number.isFinite(distance) ||
+        distance <= PAPER_RULES.maxDistanceAboveBuyZonePct,
+      actual: round(distance, 2),
+      required: "<= " + PAPER_RULES.maxDistanceAboveBuyZonePct + "%"
+    },
+    {
+      name: "Valid prices",
+      pass: price > 0 && buyZoneHigh > 0,
+      actual: price,
+      required: "> 0"
+    }
+  ];
+
+  return {
+    allowed: checks.every((c) => c.pass),
+    checks
+  };
+}
+
 function analyzeSymbol(symbol, bars, marketContext = { market: "Unknown" }, source = "unknown") {
   validateBarsForAnalysis(symbol, bars);
 
@@ -703,57 +756,6 @@ function analyzeSymbol(symbol, bars, marketContext = { market: "Unknown" }, sour
       volumeRatio: round(volumeRatio, 2)
     },
     bars
-  };
-}
-
-function evaluateSignalForPaperTrade(signal) {
-  const score = Number(signal.score || 0);
-  const rr = Number(signal.riskReward || 0);
-  const price = Number(signal.price || 0);
-  const buyZoneHigh = Number(signal.buyZoneHigh || 0);
-  const distance = Number(signal.distanceToBuyZonePct || 0);
-  const change5 = Number(signal.change5dPct || 0);
-  const change20 = Number(signal.change20dPct || 0);
-
-  const checks = [
-    {
-      name: "Score",
-      pass: score >= PAPER_RULES.minScore,
-      actual: score,
-      required: PAPER_RULES.minScore
-    },
-    {
-      name: "Risk reward",
-      pass: rr >= PAPER_RULES.minRiskReward,
-      actual: round(rr, 2),
-      required: PAPER_RULES.minRiskReward
-    },
-    {
-      name: "Trend",
-      pass: !PAPER_RULES.requireBullishTrend || (change5 >= 0 && change20 >= 0),
-      actual: `${round(change5, 2)}% / ${round(change20, 2)}%`,
-      required: "5D and 20D not negative"
-    },
-    {
-      name: "Buy zone distance",
-      pass:
-        !PAPER_RULES.requireNearBuyZone ||
-        !Number.isFinite(distance) ||
-        distance <= PAPER_RULES.maxDistanceAboveBuyZonePct,
-      actual: round(distance, 2),
-      required: "<= " + PAPER_RULES.maxDistanceAboveBuyZonePct + "%"
-    },
-    {
-      name: "Valid prices",
-      pass: price > 0 && buyZoneHigh > 0,
-      actual: price,
-      required: "> 0"
-    }
-  ];
-
-  return {
-    allowed: checks.every((c) => c.pass),
-    checks
   };
 }
 
@@ -1050,33 +1052,90 @@ function hasOpenTradeForSymbol(trades, symbol) {
   return trades.some((t) => t.status === "open" && normalizeAsxSymbol(t.symbol) === clean);
 }
 
+function expectedEntryFee() {
+  return round(PAPER_ACCOUNT.brokerFeePerTrade, 2);
+}
+
+function expectedExitFee() {
+  return round(PAPER_ACCOUNT.brokerFeePerTrade, 2);
+}
+
 function enrichTradeFinancials(trade) {
   const entry = Number(trade.entry);
   const shares = Number(trade.shares);
   const stop = Number(trade.stop);
   const target = Number(trade.target);
+  const exit = Number(trade.exit);
   const side = String(trade.side || "long").toLowerCase();
   const multiplier = side === "short" ? -1 : 1;
 
-  const cost = entry > 0 && shares > 0 ? entry * shares : 0;
-  const riskAmount =
-    entry > 0 && stop > 0 && shares > 0
-      ? Math.max(0, (entry - stop) * shares * multiplier)
-      : 0;
+  const tradeValue = entry > 0 && shares > 0 ? entry * shares : 0;
+  const entryBrokerFee = Number(trade.entryBrokerFee || trade.brokerFeeEntry || expectedEntryFee());
+  const estimatedExitBrokerFee = Number(trade.estimatedExitBrokerFee || expectedExitFee());
+  const exitBrokerFee = trade.status === "closed" ? Number(trade.exitBrokerFee || trade.brokerFeeExit || expectedExitFee()) : 0;
 
-  const targetProfit =
-    entry > 0 && target > 0 && shares > 0
-      ? Math.max(0, (target - entry) * shares * multiplier)
-      : 0;
+  const grossRisk = entry > 0 && stop > 0 && shares > 0 ? Math.max(0, (entry - stop) * shares * multiplier) : 0;
+  const openRiskAfterFees = grossRisk + entryBrokerFee + estimatedExitBrokerFee;
 
-  trade.cost = round(cost, 2);
-  trade.capitalUsed = round(cost, 2);
-  trade.riskAmount = round(riskAmount, 2);
-  trade.targetProfit = round(targetProfit, 2);
-  trade.accountRiskPct = PAPER_ACCOUNT.startingBalance > 0 ? round((riskAmount / PAPER_ACCOUNT.startingBalance) * 100, 2) : 0;
-  trade.accountUsedPct = PAPER_ACCOUNT.startingBalance > 0 ? round((cost / PAPER_ACCOUNT.startingBalance) * 100, 2) : 0;
+  const grossTargetProfit = entry > 0 && target > 0 && shares > 0 ? (target - entry) * shares * multiplier : 0;
+  const targetProfitAfterFees = grossTargetProfit - entryBrokerFee - estimatedExitBrokerFee;
+
+  trade.tradeValue = round(tradeValue, 2);
+  trade.capitalUsed = round(tradeValue, 2);
+  trade.entryBrokerFee = round(entryBrokerFee, 2);
+  trade.estimatedExitBrokerFee = round(estimatedExitBrokerFee, 2);
+  trade.exitBrokerFee = round(exitBrokerFee, 2);
+  trade.cashCommitted = round(tradeValue + entryBrokerFee, 2);
+  trade.grossRisk = round(grossRisk, 2);
+  trade.riskAmount = round(openRiskAfterFees, 2);
+  trade.grossTargetProfit = round(grossTargetProfit, 2);
+  trade.targetProfit = round(targetProfitAfterFees, 2);
+  trade.accountRiskPct = PAPER_ACCOUNT.startingBalance > 0 ? round((openRiskAfterFees / PAPER_ACCOUNT.startingBalance) * 100, 2) : 0;
+  trade.accountUsedPct = PAPER_ACCOUNT.startingBalance > 0 ? round(((tradeValue + entryBrokerFee) / PAPER_ACCOUNT.startingBalance) * 100, 2) : 0;
+
+  if (trade.status === "closed" && Number.isFinite(exit) && exit > 0) {
+    const grossPnl = (exit - entry) * shares * multiplier;
+    const totalBrokerFees = entryBrokerFee + exitBrokerFee;
+    const netPnl = grossPnl - totalBrokerFees;
+
+    trade.grossPnl = round(grossPnl, 2);
+    trade.totalBrokerFees = round(totalBrokerFees, 2);
+    trade.pnl = round(netPnl, 2);
+    trade.pnlPct = tradeValue > 0 ? round((netPnl / tradeValue) * 100, 2) : 0;
+  } else {
+    trade.totalBrokerFees = round(entryBrokerFee + estimatedExitBrokerFee, 2);
+  }
 
   return trade;
+}
+
+function calculateSharesForSignal(price, stop) {
+  const entry = Number(price);
+  const stopLoss = Number(stop);
+
+  if (!Number.isFinite(entry) || entry <= 0) return 0;
+  if (!Number.isFinite(stopLoss) || stopLoss <= 0 || stopLoss >= entry) return 0;
+
+  const riskPerShare = entry - stopLoss;
+  const sharesByRisk = Math.floor(PAPER_RULES.riskDollars / riskPerShare);
+  const sharesByMaxValue = Math.floor(PAPER_RULES.maxTradeValue / entry);
+  const shares = Math.max(0, Math.min(sharesByRisk, sharesByMaxValue));
+
+  return shares;
+}
+
+function validateTradeValueOrThrow(tradeValue) {
+  if (!Number.isFinite(tradeValue) || tradeValue <= 0) {
+    throw new Error("Trade value is invalid.");
+  }
+
+  if (tradeValue < PAPER_RULES.minTradeValue) {
+    throw new Error("Trade value must be at least $" + PAPER_RULES.minTradeValue + " before brokerage.");
+  }
+
+  if (tradeValue > PAPER_RULES.maxTradeValue) {
+    throw new Error("Trade value is above the $" + PAPER_RULES.maxTradeValue + " paper trade cap.");
+  }
 }
 
 function buildPaperTradeFromSignal(signal, source) {
@@ -1093,12 +1152,11 @@ function buildPaperTradeFromSignal(signal, source) {
   const rr = calcRiskReward(price, stop, target);
   if (rr < PAPER_RULES.minRiskReward) throw new Error("risk reward is below auto paper rule.");
 
-  const riskPerShare = price - stop;
-  const sharesByValue = Math.floor(PAPER_RULES.maxTradeValue / price);
-  const sharesByRisk = Math.floor(PAPER_RULES.riskDollars / riskPerShare);
-  const shares = Math.max(0, Math.min(sharesByValue, sharesByRisk));
+  const shares = calculateSharesForSignal(price, stop);
+  if (shares < 1) throw new Error("position size too small under current risk and value rules");
 
-  if (shares < 1) throw new Error("position size too small under current risk rules");
+  const tradeValue = price * shares;
+  validateTradeValueOrThrow(tradeValue);
 
   const trade = {
     id: "ASX-" + Date.now() + "-" + Math.floor(Math.random() * 100000),
@@ -1114,9 +1172,11 @@ function buildPaperTradeFromSignal(signal, source) {
     score: Number(signal.score || 0),
     riskReward: round(rr, 2),
     decision: String(signal.decision || ""),
-    notes: "Opened only after paper-trading rule gate passed.",
+    notes: "Opened only after paper-trading rule gate passed. Brokerage and minimum trade value applied.",
     openedAt: new Date().toISOString(),
-    source
+    source,
+    entryBrokerFee: expectedEntryFee(),
+    estimatedExitBrokerFee: expectedExitFee()
   };
 
   return enrichTradeFinancials(trade);
@@ -1155,10 +1215,14 @@ function paperAccountStats(trades) {
 
   const realisedPnl = closed.reduce((sum, t) => sum + Number(t.pnl || 0), 0);
   const capitalInOpenTrades = open.reduce((sum, t) => sum + Number(t.capitalUsed || 0), 0);
+  const cashCommittedToOpenTrades = open.reduce((sum, t) => sum + Number(t.cashCommitted || 0), 0);
   const openRisk = open.reduce((sum, t) => sum + Number(t.riskAmount || 0), 0);
   const openTargetReward = open.reduce((sum, t) => sum + Number(t.targetProfit || 0), 0);
+  const openEntryBrokerFees = open.reduce((sum, t) => sum + Number(t.entryBrokerFee || 0), 0);
+  const estimatedOpenExitFees = open.reduce((sum, t) => sum + Number(t.estimatedExitBrokerFee || 0), 0);
+  const closedBrokerFees = closed.reduce((sum, t) => sum + Number(t.totalBrokerFees || 0), 0);
 
-  const cashAvailable = PAPER_ACCOUNT.startingBalance + realisedPnl - capitalInOpenTrades;
+  const cashAvailable = PAPER_ACCOUNT.startingBalance + realisedPnl - cashCommittedToOpenTrades;
   const accountEquity = cashAvailable + capitalInOpenTrades;
 
   const wins = closed.filter((t) => Number(t.pnl) > 0);
@@ -1171,28 +1235,37 @@ function paperAccountStats(trades) {
     bySetup[key] = bySetup[key] || {
       trades: 0,
       wins: 0,
-      pnl: 0
+      pnl: 0,
+      fees: 0
     };
 
     bySetup[key].trades += 1;
     if (Number(t.pnl) > 0) bySetup[key].wins += 1;
     bySetup[key].pnl += Number(t.pnl || 0);
+    bySetup[key].fees += Number(t.totalBrokerFees || 0);
   }
 
   for (const key of Object.keys(bySetup)) {
     bySetup[key].winRate = round((bySetup[key].wins / bySetup[key].trades) * 100, 2);
     bySetup[key].pnl = round(bySetup[key].pnl, 2);
+    bySetup[key].fees = round(bySetup[key].fees, 2);
   }
 
   return {
     startingBalance: PAPER_ACCOUNT.startingBalance,
     currency: PAPER_ACCOUNT.currency,
+    brokerFeePerTrade: PAPER_ACCOUNT.brokerFeePerTrade,
     cashAvailable: round(cashAvailable, 2),
     capitalInOpenTrades: round(capitalInOpenTrades, 2),
+    cashCommittedToOpenTrades: round(cashCommittedToOpenTrades, 2),
     accountEquity: round(accountEquity, 2),
     realisedPnl: round(realisedPnl, 2),
     openRisk: round(openRisk, 2),
     openTargetReward: round(openTargetReward, 2),
+    openEntryBrokerFees: round(openEntryBrokerFees, 2),
+    estimatedOpenExitFees: round(estimatedOpenExitFees, 2),
+    closedBrokerFees: round(closedBrokerFees, 2),
+    totalEstimatedAndRealisedFees: round(openEntryBrokerFees + estimatedOpenExitFees + closedBrokerFees, 2),
     openTrades: open.length,
     closedTrades: closed.length,
     totalTrades: enriched.length,
@@ -1201,6 +1274,7 @@ function paperAccountStats(trades) {
     winRate: closed.length ? round((wins.length / closed.length) * 100, 2) : 0,
     netPnl: round(realisedPnl, 2),
     maxOpenTrades: PAPER_RULES.maxOpenTrades,
+    minTradeValue: PAPER_RULES.minTradeValue,
     maxTradeValue: PAPER_RULES.maxTradeValue,
     riskDollars: PAPER_RULES.riskDollars,
     bySetup
@@ -1248,13 +1322,12 @@ async function autoPaperFromSignals({ sector, symbols, scanLimit, maxEntries }) 
 
     try {
       const trade = buildPaperTradeFromSignal(signal, "auto-paper-rules");
-
       const currentAccount = paperAccountStats(trades);
 
-      if (Number(trade.capitalUsed || 0) > Number(currentAccount.cashAvailable || 0)) {
+      if (Number(trade.cashCommitted || 0) > Number(currentAccount.cashAvailable || 0)) {
         blocked.push({
           symbol: signal.symbol,
-          reason: "Not enough paper cash available for this trade."
+          reason: "Not enough paper cash available for trade value plus entry brokerage."
         });
         continue;
       }
@@ -1276,6 +1349,7 @@ async function autoPaperFromSignals({ sector, symbols, scanLimit, maxEntries }) 
     version: VERSION,
     mode: "auto-paper-rules",
     rules: PAPER_RULES,
+    paperAccount: PAPER_ACCOUNT,
     accountBefore: account,
     accountAfter: paperAccountStats(trades),
     scanned: result.count,
@@ -1765,6 +1839,9 @@ app.post("/api/paper/open", async (req, res) => {
       });
     }
 
+    const tradeValue = entry * shares;
+    validateTradeValueOrThrow(tradeValue);
+
     const trades = readTrades();
 
     if (openTradeCount(trades) >= PAPER_RULES.maxOpenTrades) {
@@ -1789,15 +1866,17 @@ app.post("/api/paper/open", async (req, res) => {
       score: Number(req.body.score || 0),
       riskReward: validation.riskReward,
       decision: String(req.body.decision || ""),
-      notes: String(req.body.notes || "Opened after paper-trading rule gate passed."),
+      notes: String(req.body.notes || "Opened after paper-trading rule gate passed. Brokerage and minimum trade value applied."),
       openedAt: new Date().toISOString(),
-      source: "rule-gated paper trade"
+      source: "rule-gated paper trade",
+      entryBrokerFee: expectedEntryFee(),
+      estimatedExitBrokerFee: expectedExitFee()
     });
 
     const account = paperAccountStats(trades);
 
-    if (Number(trade.capitalUsed || 0) > Number(account.cashAvailable || 0)) {
-      throw new Error("not enough paper cash available for this trade");
+    if (Number(trade.cashCommitted || 0) > Number(account.cashAvailable || 0)) {
+      throw new Error("not enough paper cash available for trade value plus entry brokerage");
     }
 
     trades.push(trade);
@@ -1856,13 +1935,10 @@ app.post("/api/paper/close", (req, res) => {
     if (!trade) throw new Error("trade not found");
     if (trade.status !== "open") throw new Error("trade is already closed");
 
-    const multiplier = trade.side === "short" ? -1 : 1;
-
     trade.status = "closed";
     trade.exit = round(exit, 4);
     trade.closedAt = new Date().toISOString();
-    trade.pnl = round((exit - trade.entry) * trade.shares * multiplier, 2);
-    trade.pnlPct = round(((exit - trade.entry) / trade.entry) * 100 * multiplier, 2);
+    trade.exitBrokerFee = expectedExitFee();
     trade.exitReason = String(req.body.exitReason || "manual close");
 
     enrichTradeFinancials(trade);
