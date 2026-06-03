@@ -4,6 +4,7 @@ let voiceEnabled = false;
 let currentRange = "1y";
 let currentInterval = "1d";
 let paperTradesCache = [];
+let selectedPaperTradeId = null;
 
 let autoTraderOn = true;
 let autoTraderInterval = null;
@@ -162,6 +163,76 @@ function signalSector(symbol) {
   if (["WOW", "COL", "WES", "A2M", "TWE", "EDV"].includes(s)) return "Staples";
 
   return "Other";
+}
+
+function formatTradeTime(value) {
+  if (!value) return "-";
+
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "-";
+
+  return d.toLocaleString("en-AU", {
+    timeZone: "Australia/Sydney",
+    day: "2-digit",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit"
+  });
+}
+
+function getPaperTradeById(id) {
+  return paperTradesCache.find((t) => String(t.id) === String(id)) || null;
+}
+
+async function selectPaperTrade(id, symbol) {
+  selectedPaperTradeId = id;
+
+  document.querySelectorAll(".paper-trade").forEach((el) => {
+    el.classList.toggle("selected-paper-trade", el.dataset.tradeId === String(id));
+  });
+
+  const trade = getPaperTradeById(id);
+  const cleanSymbol = symbol || (trade && trade.symbol);
+
+  if (!cleanSymbol) return;
+
+  const existingSignal = lastSignals.find((s) => shortSymbol(s.symbol) === shortSymbol(cleanSymbol));
+
+  if (existingSignal) {
+    selectedSignal = existingSignal;
+  } else if (trade) {
+    selectedSignal = {
+      symbol: trade.symbol,
+      setup: trade.setup || "Paper trade",
+      price: Number(trade.exit || trade.entry || 0),
+      buyZoneLow: Number(trade.entry || 0),
+      buyZoneHigh: Number(trade.entry || 0),
+      stopLoss: Number(trade.stop || 0),
+      target1: Number(trade.target || 0),
+      target2: Number(trade.target || 0),
+      riskReward: Number(trade.riskReward || 0),
+      score: Number(trade.score || 0),
+      change5dPct: 0,
+      change20dPct: 0,
+      reasons: ["Loaded from paper trade history."],
+      warnings: [],
+      scoreParts: [],
+      paperRules: {
+        allowed: false,
+        checks: []
+      }
+    };
+  }
+
+  document.querySelectorAll("#signals tr").forEach((r) =>
+    r.classList.toggle("selected", selectedSignal && r.dataset.symbol === selectedSignal.symbol)
+  );
+
+  if (selectedSignal) {
+    renderDetail(selectedSignal);
+    await loadChart(selectedSignal.symbol);
+    document.getElementById("chartPanel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 }
 
 function getSydneyParts(date = new Date()) {
@@ -418,11 +489,16 @@ function renderSignals(data) {
 
 function selectSignal(symbol, quiet = false) {
   selectedSignal = lastSignals.find((s) => s.symbol === symbol) || null;
+  selectedPaperTradeId = null;
   window.selectedTicker = selectedSignal ? selectedSignal.symbol : null;
 
   document.querySelectorAll("#signals tr").forEach((r) =>
     r.classList.toggle("selected", selectedSignal && r.dataset.symbol === selectedSignal.symbol)
   );
+
+  document.querySelectorAll(".paper-trade").forEach((el) => {
+    el.classList.remove("selected-paper-trade");
+  });
 
   renderDetail(selectedSignal);
 
@@ -546,7 +622,17 @@ async function loadChart(symbol) {
 }
 
 function getTradesForSymbol(symbol) {
-  return paperTradesCache.filter((t) => t.symbol === symbol || shortSymbol(t.symbol) === shortSymbol(symbol));
+  const rows = paperTradesCache.filter((t) => t.symbol === symbol || shortSymbol(t.symbol) === shortSymbol(symbol));
+
+  if (selectedPaperTradeId) {
+    return rows.slice().sort((a, b) => {
+      if (String(a.id) === String(selectedPaperTradeId)) return -1;
+      if (String(b.id) === String(selectedPaperTradeId)) return 1;
+      return 0;
+    });
+  }
+
+  return rows;
 }
 
 function drawChart(s, incomingBars, sourceLabel) {
@@ -652,15 +738,15 @@ function drawChart(s, incomingBars, sourceLabel) {
     ctx.restore();
   }
 
-  function badge(val, color, text, alignRight = false) {
+  function badge(val, color, text, alignRight = false, yOffset = 0) {
     if (!isGoodNumber(val) || Number(val) <= 0) return;
 
-    const yy = y(Number(val));
+    const yy = y(Number(val)) + yOffset;
     ctx.save();
     ctx.font = "bold 13px sans-serif";
     const padX = 8;
     const textWidth = ctx.measureText(text).width;
-    const boxW = textWidth + padX * 2;
+    const boxW = Math.min(W - leftPad - rightPad, textWidth + padX * 2);
     const boxH = 24;
     const xx = alignRight ? W - rightPad - boxW : leftPad;
 
@@ -681,19 +767,46 @@ function drawChart(s, incomingBars, sourceLabel) {
   const trades = getTradesForSymbol(s.symbol);
 
   trades.forEach((t) => {
-    line(t.entry, "#42e8ff", "PAPER ENTRY", 2.2);
-    line(t.stop, "#ff5d5d", "PAPER STOP", 1.8);
-    line(t.target, "#34f59b", "PAPER TARGET", 1.8);
-    badge(t.entry, "#1c79ff", "ENTRY " + money(t.entry), false);
+    const isSelectedTrade = String(t.id) === String(selectedPaperTradeId);
+    const entryLabel = isSelectedTrade
+      ? `ENTRY ${shortSymbol(t.symbol)} ${money(t.entry)} | Bought ${formatTradeTime(t.openedAt)}`
+      : `ENTRY ${money(t.entry)}`;
+
+    const exitLabel = isSelectedTrade
+      ? `EXIT ${shortSymbol(t.symbol)} ${money(t.exit)} | Sold ${formatTradeTime(t.closedAt)}`
+      : `EXIT ${money(t.exit)}`;
+
+    const profitLabel =
+      t.status === "closed"
+        ? `NET P/L ${signedMoney(t.pnl)} | Fees ${money(t.totalBrokerFees)}`
+        : `TARGET PROFIT ${signedMoney(t.targetProfit)}`;
+
+    line(t.entry, "#42e8ff", isSelectedTrade ? "SELECTED PAPER ENTRY" : "PAPER ENTRY", isSelectedTrade ? 3 : 2.2);
+    line(t.stop, "#ff5d5d", "PAPER STOP", isSelectedTrade ? 2.2 : 1.8);
+    line(t.target, "#34f59b", "PAPER TARGET", isSelectedTrade ? 2.2 : 1.8);
+
+    badge(t.entry, "#1c79ff", entryLabel, false, isSelectedTrade ? -16 : 0);
 
     if (isGoodNumber(t.exit) && Number(t.exit) > 0) {
-      line(t.exit, "#ffc857", "PAPER EXIT", 2.2);
-      badge(t.exit, "#ffc857", "EXIT " + money(t.exit), true);
+      line(t.exit, "#ffc857", isSelectedTrade ? "SELECTED PAPER EXIT" : "PAPER EXIT", isSelectedTrade ? 3 : 2.2);
+      badge(t.exit, "#ffc857", exitLabel, true, isSelectedTrade ? 16 : 0);
+    }
+
+    if (isSelectedTrade) {
+      const details = [
+        `Shares ${t.shares}`,
+        `Value ${money(t.tradeValue || t.capitalUsed)}`,
+        `Entry fee ${money(t.entryBrokerFee)}`,
+        t.status === "closed" ? `Exit fee ${money(t.exitBrokerFee)}` : `Est exit fee ${money(t.estimatedExitBrokerFee)}`
+      ].join(" | ");
+
+      badge(t.entry, "#0b1320", details, true, 16);
     }
 
     if (t.status === "closed" && isGoodNumber(t.pnl)) {
-      const label = "NET P/L " + signedMoney(t.pnl);
-      badge(t.exit || t.entry, Number(t.pnl) >= 0 ? "#23c983" : "#ff5d5d", label, true);
+      badge(t.exit || t.entry, Number(t.pnl) >= 0 ? "#23c983" : "#ff5d5d", profitLabel, true, -16);
+    } else if (isSelectedTrade && isGoodNumber(t.targetProfit)) {
+      badge(t.target || t.entry, Number(t.targetProfit) >= 0 ? "#23c983" : "#ff5d5d", profitLabel, true, -16);
     }
   });
 
@@ -707,7 +820,7 @@ function drawChart(s, incomingBars, sourceLabel) {
 
   if ($("chartMeta")) {
     $("chartMeta").textContent =
-      `${shortSymbol(s.symbol)} | ${bars.length} bars | ${currentRange} / ${currentInterval} | Entry, exit, stop, target and paper profit markers`;
+      `${shortSymbol(s.symbol)} | ${bars.length} bars | ${currentRange} / ${currentInterval} | Click a paper trade to show bought time, sold time, entry, exit and profit`;
   }
 }
 
@@ -728,6 +841,7 @@ async function runScan(mode = "scan") {
     );
 
     selectedSignal = null;
+    selectedPaperTradeId = null;
     renderSignals(data);
     renderAutoWarnings();
 
@@ -766,7 +880,7 @@ async function runAutoPaper() {
 
     const openedHtml = (json.opened || [])
       .map(
-        (t) => `<div class="paper-trade">
+        (t) => `<div class="paper-trade clickable-paper-trade ${String(t.id) === String(selectedPaperTradeId) ? "selected-paper-trade" : ""}" data-trade-id="${t.id}" onclick="selectPaperTrade('${t.id}', '${t.symbol}')">
           <div class="paper-trade-head">
             <strong>${shortSymbol(t.symbol)} AUTO OPENED</strong>
             <small>${t.setup}</small>
@@ -774,6 +888,7 @@ async function runAutoPaper() {
           <div class="trade-profit ${pnlClass(t.targetProfit)}">
             TARGET PROFIT AFTER FEES: <strong>${signedMoney(t.targetProfit)}</strong>
           </div>
+          <small><strong>Bought:</strong> ${formatTradeTime(t.openedAt)}</small>
           <small>Trade value ${money(t.tradeValue)} | Shares ${t.shares} | Entry fee ${money(t.entryBrokerFee)} | Cash committed ${money(t.cashCommitted)}</small>
           <small>Risk after fees ${money(t.riskAmount)} | Target reward after fees ${money(t.targetProfit)}</small>
         </div>`
@@ -816,7 +931,7 @@ async function runAutoPaper() {
         <div class="snapshot-item"><strong>Minimum trade</strong><span>${money(account.minTradeValue)}</span></div>
       </div>
 
-      <h4>Opened</h4>
+      <h4>Opened this run</h4>
       <div class="paper-trades">
         ${openedHtml || `<div class="paper-trade"><strong>No trades opened</strong><small>No setup was actually entered this run.</small></div>`}
       </div>
@@ -834,6 +949,7 @@ async function runAutoPaper() {
 
     if (Number(json.openedCount || 0) > 0) {
       const first = json.opened[0];
+      selectedPaperTradeId = first.id;
       const msg = `${shortSymbol(first.symbol)} auto paper trade opened. Target profit after fees ${signedMoney(first.targetProfit)}, cash left ${money(account.cashAvailable)}.`;
       toast(msg);
       speak(msg);
@@ -843,7 +959,10 @@ async function runAutoPaper() {
 
     await loadPaper();
 
-    if (selectedSignal) {
+    if (selectedPaperTradeId) {
+      const trade = getPaperTradeById(selectedPaperTradeId);
+      if (trade) await selectPaperTrade(trade.id, trade.symbol);
+    } else if (selectedSignal) {
       await loadChart(selectedSignal.symbol);
     }
   } catch (e) {
@@ -897,11 +1016,12 @@ async function openPaperTrade(symbol) {
 
     const account = json.account || {};
     const trade = json.trade || {};
+    selectedPaperTradeId = trade.id;
+
     toast(`Paper trade opened for ${shortSymbol(symbol)}. Target profit after fees ${signedMoney(trade.targetProfit)}, cash left ${money(account.cashAvailable)}.`);
 
     await loadPaper();
-
-    if (selectedSignal) await loadChart(selectedSignal.symbol);
+    await selectPaperTrade(trade.id, trade.symbol);
   } catch (e) {
     toast(e.message);
   }
@@ -927,7 +1047,7 @@ function renderPaperAccount(stats, trades) {
   $("paperStats").innerHTML = `
     <div class="paper-account-head">
       <h3>$5,000 Paper Account</h3>
-      <small>Brokerage included. Minimum trade value is ${money(st.minTradeValue || 500)} before brokerage.</small>
+      <small>Click any paper trade to show bought time, sold time, entry, exit, brokerage and profit on the chart. Minimum trade value is ${money(st.minTradeValue || 500)} before brokerage.</small>
     </div>
 
     <div class="paper-summary account-summary">
@@ -950,7 +1070,7 @@ function renderPaperAccount(stats, trades) {
       ${
         openRows
           .map(
-            (t) => `<div class="paper-trade">
+            (t) => `<div class="paper-trade clickable-paper-trade ${String(t.id) === String(selectedPaperTradeId) ? "selected-paper-trade" : ""}" data-trade-id="${t.id}" onclick="selectPaperTrade('${t.id}', '${t.symbol}')">
               <div class="paper-trade-head">
                 <strong>${shortSymbol(t.symbol)} OPEN</strong>
                 <small>${t.setup || "paper trade"}</small>
@@ -960,13 +1080,14 @@ function renderPaperAccount(stats, trades) {
                 TARGET PROFIT AFTER FEES: <strong>${signedMoney(t.targetProfit)}</strong>
               </div>
 
+              <small><strong>Bought:</strong> ${formatTradeTime(t.openedAt)}</small>
               <small>Entry ${money(t.entry)} | Shares ${t.shares} | Trade value ${money(t.tradeValue || t.capitalUsed)}</small>
               <small>Entry fee ${money(t.entryBrokerFee)} | Est. exit fee ${money(t.estimatedExitBrokerFee)} | Cash committed ${money(t.cashCommitted)}</small>
               <small>Stop ${money(t.stop)} | Target ${money(t.target)}</small>
               <small>Risk after fees ${money(t.riskAmount)} | R:R ${num(t.riskReward)}</small>
               <small>Account used ${num(t.accountUsedPct)}% | Account risk ${num(t.accountRiskPct)}%</small>
 
-              <div class="paper-close-row">
+              <div class="paper-close-row" onclick="event.stopPropagation()">
                 <input id="close-${t.id}" type="number" step="0.01" value="${t.entry}">
                 <button class="mini" onclick="closePaperTrade('${t.id}')">Close</button>
               </div>
@@ -986,7 +1107,7 @@ function renderPaperAccount(stats, trades) {
         closedRows
           .slice(0, 12)
           .map(
-            (t) => `<div class="paper-trade">
+            (t) => `<div class="paper-trade clickable-paper-trade ${String(t.id) === String(selectedPaperTradeId) ? "selected-paper-trade" : ""}" data-trade-id="${t.id}" onclick="selectPaperTrade('${t.id}', '${t.symbol}')">
               <div class="paper-trade-head">
                 <strong>${shortSymbol(t.symbol)} CLOSED</strong>
                 <small>${t.exitReason || "closed"}</small>
@@ -996,6 +1117,7 @@ function renderPaperAccount(stats, trades) {
                 NET PROFIT AFTER FEES: <strong>${signedMoney(t.pnl)}</strong>
               </div>
 
+              <small><strong>Bought:</strong> ${formatTradeTime(t.openedAt)} | <strong>Sold:</strong> ${formatTradeTime(t.closedAt)}</small>
               <small>Entry ${money(t.entry)} | Exit ${money(t.exit)} | Shares ${t.shares}</small>
               <small>Trade value ${money(t.tradeValue || t.capitalUsed)} | Gross P/L ${signedMoney(t.grossPnl)}</small>
               <small>Broker fees ${money(t.totalBrokerFees)} | Net P/L ${signedMoney(t.pnl)} (${num(t.pnlPct)}%)</small>
@@ -1058,13 +1180,12 @@ async function closePaperTrade(id) {
 
     const account = json.account || {};
     const trade = json.trade || {};
+    selectedPaperTradeId = trade.id;
+
     toast(`Paper trade closed. Net profit after fees ${signedMoney(trade.pnl)}. Cash available ${money(account.cashAvailable)}.`);
 
     await loadPaper();
-
-    if (selectedSignal) {
-      await loadChart(selectedSignal.symbol);
-    }
+    await selectPaperTrade(trade.id, trade.symbol);
   } catch (e) {
     toast(e.message);
   }
@@ -1324,6 +1445,7 @@ window.openPaperTrade = openPaperTrade;
 window.checkOptions = checkOptions;
 window.closePaperTrade = closePaperTrade;
 window.runAutoPaper = runAutoPaper;
+window.selectPaperTrade = selectPaperTrade;
 
 if ($("scanBtn")) $("scanBtn").addEventListener("click", () => runScan("scan"));
 if ($("refreshBtn")) $("refreshBtn").addEventListener("click", () => runScan("scan"));
@@ -1350,8 +1472,13 @@ if ($("autoRunNowBtn")) {
 if ($("clearSelect")) {
   $("clearSelect").addEventListener("click", () => {
     selectedSignal = null;
+    selectedPaperTradeId = null;
     window.selectedTicker = null;
     renderDetail(null);
+
+    document.querySelectorAll(".paper-trade").forEach((el) => {
+      el.classList.remove("selected-paper-trade");
+    });
   });
 }
 
