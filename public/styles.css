@@ -214,6 +214,15 @@ button.secondary,
   color: #d2e9ff;
 }
 
+button:hover {
+  filter: brightness(1.08);
+}
+
+button:focus {
+  outline: 2px solid rgba(66, 232, 255, .45);
+  outline-offset: 2px;
+}
+
 .mini {
   padding: 7px 10px;
   font-size: 12px;
@@ -589,7 +598,7 @@ tbody tr.selected {
   margin: 0 0 8px;
 }
 
-#detail h3::after {
+#detail h3:after {
   content: " - setup only";
   color: var(--muted);
   font-size: 11px;
@@ -675,7 +684,8 @@ tbody tr.selected {
 #paperPanel.paper-account-section {
   margin-top: 14px;
   padding: 16px;
-  display: block;
+  display: flex;
+  flex-direction: column;
 }
 
 #paperPanel .card-head {
@@ -684,6 +694,7 @@ tbody tr.selected {
   justify-content: space-between;
   gap: 14px;
   margin-bottom: 12px;
+  order: 0;
 }
 
 #paperPanel .card-head h3 {
@@ -701,7 +712,27 @@ tbody tr.selected {
   justify-content: flex-end;
 }
 
+#paperPanel #paperStats {
+  order: 1;
+}
+
+#paperPanel .auto-paper-divider {
+  order: 2;
+  margin: 18px 0 10px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+#paperPanel .auto-paper-divider h3 {
+  margin: 0 0 4px;
+}
+
+#paperPanel .auto-paper-divider small {
+  color: var(--muted);
+}
+
 #paperPanel .auto-trader-grid {
+  order: 3;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
@@ -709,6 +740,7 @@ tbody tr.selected {
 }
 
 #paperPanel .auto-warning-list {
+  order: 4;
   display: grid;
   gap: 8px;
   margin: 10px 0 14px;
@@ -717,6 +749,7 @@ tbody tr.selected {
 }
 
 #paperPanel .auto-paper-box {
+  order: 5;
   margin: 12px 0;
 }
 
@@ -824,6 +857,33 @@ tbody tr.selected {
   grid-template-columns: 1fr auto;
   gap: 8px;
   margin-top: 8px;
+}
+
+.trade-profit {
+  margin: 8px 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(66, 232, 255, .08);
+  border: 1px solid rgba(66, 232, 255, .22);
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: .04em;
+}
+
+.trade-profit strong {
+  font-size: 18px;
+}
+
+.profit-good {
+  color: var(--green);
+}
+
+.profit-bad {
+  color: var(--red);
+}
+
+.profit-flat {
+  color: var(--amber);
 }
 
 .warning-card {
