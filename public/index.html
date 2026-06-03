@@ -32,8 +32,7 @@
         <button class="nav active" data-mode="dashboard">▥ Dashboard</button>
         <button class="nav" data-mode="chart">▤ Chart</button>
         <button class="nav" data-mode="scan">⌕ Live scanner</button>
-        <button class="nav" data-mode="paper">⚙ Paper account</button>
-        <button class="nav" data-mode="auto">◉ Auto trader</button>
+        <button class="nav" data-mode="paper">⚙ Auto paper account</button>
         <button class="nav" data-mode="journal">▤ Trade journal</button>
         <button class="nav" data-mode="performance">▥ Performance</button>
         <button class="nav" data-mode="settings">⚙ Scanner settings</button>
@@ -44,7 +43,7 @@
       <div class="quick-card">
         <h3>Quick Actions</h3>
         <button id="scanBtn">Run ASX Scan <span>READY</span></button>
-        <button id="autoPaperBtn">Auto Paper Scan <span>RULED</span></button>
+        <button id="autoPaperBtn">Run Auto Paper <span>RULED</span></button>
         <button id="refreshBtn">Refresh Market <span>READY</span></button>
         <button id="paperBtn">Paper Account <span>LIVE</span></button>
         <button id="runBacktest">Run Backtest <span>READY</span></button>
@@ -188,16 +187,19 @@
         </aside>
       </section>
 
-      <section class="card auto-trader-panel full-paper-line" id="autoTraderPanel">
-        <div class="auto-trader-head">
+      <section class="card paper-account-section full-paper-line" id="paperPanel">
+        <div class="card-head">
           <div>
-            <h3>AUTO PAPER TRADER</h3>
-            <small>Separate rule-gated engine. This watches for near entries, opens paper trades, and warns near exits.</small>
+            <h3>AUTO PAPER ACCOUNT</h3>
+            <small>
+              One combined section for the auto trader, $5,000 paper account, warnings, open trades, cash, capital used, risk and realised P/L.
+            </small>
           </div>
 
           <div class="auto-trader-actions">
             <button id="autoToggleBtn">Auto Trader: ON</button>
             <button id="autoRunNowBtn" class="secondary">Run Auto Now</button>
+            <button class="mini" id="paperAutoPanelBtn">Refresh Paper</button>
           </div>
         </div>
 
@@ -228,17 +230,6 @@
             <strong>Waiting for rule-gated setups</strong>
             <small>Score 80+ and R:R 1.8+ required before the system opens a paper trade.</small>
           </div>
-        </div>
-      </section>
-
-      <section class="card paper-account-section full-paper-line" id="paperPanel">
-        <div class="card-head">
-          <div>
-            <h3>$5,000 PAPER ACCOUNT</h3>
-            <small>This is the actual paper account. Open trades, cash, capital used, risk and realised P/L show here.</small>
-          </div>
-
-          <button class="mini" id="paperAutoPanelBtn">Run Auto</button>
         </div>
 
         <div id="autoPaperOutput" class="auto-paper-box">
