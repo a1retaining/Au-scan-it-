@@ -209,3 +209,130 @@ pre{white-space:pre-wrap;word-break:break-word;background:#03070d;border:1px sol
     grid-template-columns: 1fr !important;
   }
 }
+
+/* v10 layout separation: setup decision vs paper trading */
+
+.full-paper-line {
+  margin-top: 14px;
+  width: 100%;
+}
+
+.paper-account-section {
+  padding: 16px;
+}
+
+.paper-account-section .card-head {
+  margin-bottom: 12px;
+}
+
+.paper-account-section h3,
+.auto-trader-panel h3 {
+  margin: 0 0 4px;
+}
+
+.paper-account-section small,
+.auto-trader-panel small {
+  color: var(--muted);
+}
+
+#paperPanel {
+  display: block;
+}
+
+#paperPanel .paper-grid {
+  display: block;
+}
+
+.paper-account-head {
+  margin: 12px 0;
+}
+
+.paper-account-head h3 {
+  margin: 0 0 4px;
+}
+
+.account-summary,
+.paper-summary.account-summary {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 10px !important;
+  margin: 12px 0 18px !important;
+}
+
+.auto-trader-grid {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 10px !important;
+  margin-top: 12px !important;
+}
+
+.auto-warning-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  max-height: 260px;
+  overflow: auto;
+}
+
+.paper-trades {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0 18px;
+  max-height: none;
+  overflow: visible;
+}
+
+.paper-trade {
+  padding: 12px;
+}
+
+.paper-trade-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.paper-close-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.paper-close-row input {
+  width: 100%;
+  min-width: 0;
+}
+
+.warning-card {
+  border-color: rgba(255, 200, 87, .55) !important;
+  background: rgba(255, 200, 87, .07) !important;
+}
+
+#detail h3::after {
+  content: " - setup only";
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+@media(max-width: 1100px) {
+  .account-summary,
+  .paper-summary.account-summary,
+  .auto-trader-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media(max-width: 650px) {
+  .account-summary,
+  .paper-summary.account-summary,
+  .auto-trader-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .paper-trade-head {
+    flex-direction: column;
+  }
+}
