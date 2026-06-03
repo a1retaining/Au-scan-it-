@@ -23,7 +23,6 @@ function isGoodNumber(v) {
 const money = (v) => {
   if (!isGoodNumber(v)) return "-";
   const n = Number(v);
-  if (n <= 0) return "-";
   return "$" + n.toLocaleString(undefined, { maximumFractionDigits: 2 });
 };
 
@@ -627,9 +626,8 @@ async function runAutoPaper() {
             <strong>${shortSymbol(t.symbol)} AUTO OPENED</strong>
             <small>${t.setup}</small>
           </div>
-          <small>
-            Entry ${money(t.entry)} | Shares ${t.shares} | Capital ${money(t.capitalUsed)} | Risk ${money(t.riskAmount)} | Target reward ${money(t.targetProfit)}
-          </small>
+          <small>Trade value ${money(t.tradeValue)} | Shares ${t.shares} | Entry fee ${money(t.entryBrokerFee)} | Cash committed ${money(t.cashCommitted)}</small>
+          <small>Risk after fees ${money(t.riskAmount)} | Target reward after fees ${money(t.targetProfit)}</small>
         </div>`
       )
       .join("");
@@ -666,6 +664,8 @@ async function runAutoPaper() {
         <div class="snapshot-item"><strong>Blocked this run</strong><span>${json.blockedCount || 0}</span></div>
         <div class="snapshot-item"><strong>Cash left</strong><span>${money(account.cashAvailable)}</span></div>
         <div class="snapshot-item"><strong>In trades</strong><span>${money(account.capitalInOpenTrades)}</span></div>
+        <div class="snapshot-item"><strong>Broker fee</strong><span>${money(account.brokerFeePerTrade)}</span></div>
+        <div class="snapshot-item"><strong>Minimum trade</strong><span>${money(account.minTradeValue)}</span></div>
       </div>
 
       <h4>Opened</h4>
@@ -686,7 +686,7 @@ async function runAutoPaper() {
 
     if (Number(json.openedCount || 0) > 0) {
       const first = json.opened[0];
-      const msg = `${shortSymbol(first.symbol)} auto paper trade opened. Capital used ${money(first.capitalUsed)}, cash left ${money(account.cashAvailable)}.`;
+      const msg = `${shortSymbol(first.symbol)} auto paper trade opened. Trade value ${money(first.tradeValue)}, brokerage ${money(first.entryBrokerFee)}, cash left ${money(account.cashAvailable)}.`;
       toast(msg);
       speak(msg);
     } else {
@@ -712,6 +712,10 @@ async function openPaperTrade(symbol) {
   if (!s) return;
 
   try {
+    const price = Math.max(Number(s.price || 0), 0);
+    const minTradeValue = 500;
+    const shares = price > 0 ? Math.max(1, Math.ceil(minTradeValue / price)) : 0;
+
     const response = await fetch("/api/paper/open", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -719,7 +723,7 @@ async function openPaperTrade(symbol) {
         symbol,
         side: "long",
         entry: s.price,
-        shares: Math.max(1, Math.floor(500 / Math.max(Number(s.price || 1), 1))),
+        shares,
         stop: s.stopLoss,
         target: s.target1,
         setup: s.setup,
@@ -744,7 +748,8 @@ async function openPaperTrade(symbol) {
     }
 
     const account = json.account || {};
-    toast(`Paper trade opened for ${shortSymbol(symbol)}. Cash left ${money(account.cashAvailable)}.`);
+    const trade = json.trade || {};
+    toast(`Paper trade opened for ${shortSymbol(symbol)}. Trade value ${money(trade.tradeValue)}, fee ${money(trade.entryBrokerFee)}, cash left ${money(account.cashAvailable)}.`);
 
     await loadPaper();
 
@@ -774,17 +779,21 @@ function renderPaperAccount(stats, trades) {
   $("paperStats").innerHTML = `
     <div class="paper-account-head">
       <h3>$5,000 Paper Account</h3>
-      <small>Shows cash, capital used, risk, reward and trade history.</small>
+      <small>Brokerage included. Minimum trade value is ${money(st.minTradeValue || 500)} before brokerage.</small>
     </div>
 
     <div class="paper-summary account-summary">
       <div class="small-metric"><span>Starting balance</span><strong>${money(st.startingBalance || 5000)}</strong></div>
       <div class="small-metric"><span>Cash available</span><strong>${money(st.cashAvailable)}</strong></div>
       <div class="small-metric"><span>Capital in trades</span><strong>${money(st.capitalInOpenTrades)}</strong></div>
+      <div class="small-metric"><span>Cash committed</span><strong>${money(st.cashCommittedToOpenTrades)}</strong></div>
       <div class="small-metric"><span>Account equity</span><strong>${money(st.accountEquity)}</strong></div>
-      <div class="small-metric"><span>Open risk</span><strong>${money(st.openRisk)}</strong></div>
-      <div class="small-metric"><span>Target reward</span><strong>${money(st.openTargetReward)}</strong></div>
-      <div class="small-metric"><span>Realised P/L</span><strong>${signedMoney(st.realisedPnl || st.netPnl || 0)}</strong></div>
+      <div class="small-metric"><span>Open risk after fees</span><strong>${money(st.openRisk)}</strong></div>
+      <div class="small-metric"><span>Target reward after fees</span><strong>${money(st.openTargetReward)}</strong></div>
+      <div class="small-metric"><span>Realised net P/L</span><strong>${signedMoney(st.realisedPnl || st.netPnl || 0)}</strong></div>
+      <div class="small-metric"><span>Broker fee each trade</span><strong>${money(st.brokerFeePerTrade || 9.5)}</strong></div>
+      <div class="small-metric"><span>Open entry fees</span><strong>${money(st.openEntryBrokerFees)}</strong></div>
+      <div class="small-metric"><span>Est. open exit fees</span><strong>${money(st.estimatedOpenExitFees)}</strong></div>
       <div class="small-metric"><span>Open trades</span><strong>${st.openTrades || 0} / ${st.maxOpenTrades || 5}</strong></div>
     </div>
 
@@ -799,15 +808,11 @@ function renderPaperAccount(stats, trades) {
                 <small>${t.setup || "paper trade"}</small>
               </div>
 
-              <small>
-                Entry ${money(t.entry)} | Shares ${t.shares} | Capital used ${money(t.capitalUsed || t.cost)}
-              </small>
-              <small>
-                Stop ${money(t.stop)} | Target ${money(t.target)} | Risk ${money(t.riskAmount)} | Target reward ${money(t.targetProfit)}
-              </small>
-              <small>
-                R:R ${num(t.riskReward)} | Account used ${num(t.accountUsedPct)}% | Account risk ${num(t.accountRiskPct)}%
-              </small>
+              <small>Entry ${money(t.entry)} | Shares ${t.shares} | Trade value ${money(t.tradeValue || t.capitalUsed)}</small>
+              <small>Entry fee ${money(t.entryBrokerFee)} | Est. exit fee ${money(t.estimatedExitBrokerFee)} | Cash committed ${money(t.cashCommitted)}</small>
+              <small>Stop ${money(t.stop)} | Target ${money(t.target)}</small>
+              <small>Risk after fees ${money(t.riskAmount)} | Target reward after fees ${money(t.targetProfit)}</small>
+              <small>R:R ${num(t.riskReward)} | Account used ${num(t.accountUsedPct)}% | Account risk ${num(t.accountRiskPct)}%</small>
 
               <div class="paper-close-row">
                 <input id="close-${t.id}" type="number" step="0.01" value="${t.entry}">
@@ -818,7 +823,7 @@ function renderPaperAccount(stats, trades) {
           .join("") ||
         `<div class="paper-trade">
           <strong>No open paper trades</strong>
-          <small>Auto Paper will open trades only after the rule gate passes.</small>
+          <small>Auto Paper will open trades only after the rule gate passes and trade value is at least $500 before brokerage.</small>
         </div>`
       }
     </div>
@@ -835,13 +840,14 @@ function renderPaperAccount(stats, trades) {
                 <small>${t.exitReason || "closed"}</small>
               </div>
               <small>Entry ${money(t.entry)} | Exit ${money(t.exit)} | Shares ${t.shares}</small>
-              <small>P/L ${signedMoney(t.pnl)} (${num(t.pnlPct)}%) | Capital ${money(t.capitalUsed || t.cost)}</small>
+              <small>Trade value ${money(t.tradeValue || t.capitalUsed)} | Gross P/L ${signedMoney(t.grossPnl)}</small>
+              <small>Broker fees ${money(t.totalBrokerFees)} | Net P/L ${signedMoney(t.pnl)} (${num(t.pnlPct)}%)</small>
             </div>`
           )
           .join("") ||
         `<div class="paper-trade">
           <strong>No closed trades yet</strong>
-          <small>Closed trades will show here.</small>
+          <small>Closed trades will show net P/L after entry and exit brokerage.</small>
         </div>`
       }
     </div>
@@ -894,7 +900,8 @@ async function closePaperTrade(id) {
     }
 
     const account = json.account || {};
-    toast(`Paper trade closed. Cash available ${money(account.cashAvailable)}.`);
+    const trade = json.trade || {};
+    toast(`Paper trade closed. Net P/L ${signedMoney(trade.pnl)} after fees. Cash available ${money(account.cashAvailable)}.`);
 
     await loadPaper();
 
@@ -977,7 +984,7 @@ function warnBeforeEntries() {
   return near.map((s) => ({
     type: "NEAR ENTRY",
     symbol: s.symbol,
-    text: `${shortSymbol(s.symbol)} is near the auto-entry zone, but has not entered yet. Score ${s.score}, R:R ${num(s.riskReward)}, distance ${num(s.distanceToBuyZonePct)}%.`
+    text: `${shortSymbol(s.symbol)} is near the auto-entry zone, but has not entered yet. Score ${s.score}, R:R ${num(s.riskReward)}, distance ${num(s.distanceToBuyZonePct)}%. Minimum trade is $500 before brokerage.`
   }));
 }
 
@@ -1001,7 +1008,7 @@ function warnBeforeExits() {
         warnings.push({
           type: "TARGET WARNING",
           symbol: trade.symbol,
-          text: `${shortSymbol(trade.symbol)} is close to target. Price ${money(price)}, target ${money(target)}.`
+          text: `${shortSymbol(trade.symbol)} is close to target. Price ${money(price)}, target ${money(target)}. Exit brokerage will apply.`
         });
       }
     }
@@ -1013,7 +1020,7 @@ function warnBeforeExits() {
         warnings.push({
           type: "STOP WARNING",
           symbol: trade.symbol,
-          text: `${shortSymbol(trade.symbol)} is close to stop. Price ${money(price)}, stop ${money(stop)}.`
+          text: `${shortSymbol(trade.symbol)} is close to stop. Price ${money(price)}, stop ${money(stop)}. Exit brokerage will apply.`
         });
       }
     }
@@ -1049,7 +1056,7 @@ function renderAutoWarnings() {
         .join("")
     : `<div class="paper-trade">
         <strong>No near-entry or near-exit warnings</strong>
-        <small>Auto trader is monitoring.</small>
+        <small>Auto trader is monitoring. Minimum trade value is $500 before brokerage.</small>
       </div>`;
 
   if (all.length) {
@@ -1135,7 +1142,6 @@ function setupNav() {
         chart: "chartPanel",
         scan: "scanPanel",
         paper: "paperPanel",
-        auto: "autoTraderPanel",
         journal: "paperPanel",
         performance: "paperPanel",
         settings: "settingsPanel",
