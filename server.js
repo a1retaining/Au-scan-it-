@@ -4,7 +4,8 @@ const fs = require("fs");
 
 const app = express();
 const PORT = process.env.PORT || 10000;
-const VERSION = "tradingmint-asx-real-v9-data-validated-auto-paper";
+const VERSION = "tradingmint-asx-real-v10-paper-account-ledger";
+
 const publicPath = path.join(__dirname, "public");
 const dataPath = path.join(__dirname, "data");
 const tradesPath = path.join(dataPath, "paper-trades.json");
@@ -21,6 +22,11 @@ const ASX_CONFIG = {
   dataDelay:
     "Yahoo public ASX chart data may be delayed and is not licensed exchange real-time data. 1-minute bars are used where available, but this app does not claim official live ASX data.",
   yahooSuffix: ".AX"
+};
+
+const PAPER_ACCOUNT = {
+  startingBalance: 5000,
+  currency: "AUD"
 };
 
 const PAPER_RULES = {
@@ -207,7 +213,6 @@ function calcRiskReward(entry, stop, target) {
   if (risk <= 0 || reward <= 0) return 0;
 
   const rr = reward / risk;
-
   if (!Number.isFinite(rr) || rr <= 0 || rr > 20) return 0;
 
   return rr;
@@ -259,7 +264,7 @@ async function fetchText(url, timeoutMs = 16000) {
       signal: controller.signal,
       headers: {
         "User-Agent": "Mozilla/5.0 TradingMintASX/1.0",
-        "Accept": "application/json,text/plain,*/*"
+        Accept: "application/json,text/plain,*/*"
       }
     });
 
@@ -305,15 +310,16 @@ async function yahooChart(symbol, range = "1y", interval = "1d") {
 
   const timestamps = Array.isArray(result.timestamp) ? result.timestamp : [];
   const quote = result.indicators && result.indicators.quote && result.indicators.quote[0];
+
+  if (!quote || !timestamps.length) {
+    throw new Error("No Yahoo quote data for " + cleanSymbol);
+  }
+
   const adjclose =
     result.indicators &&
     result.indicators.adjclose &&
     result.indicators.adjclose[0] &&
     result.indicators.adjclose[0].adjclose;
-
-  if (!quote || !timestamps.length) {
-    throw new Error("No Yahoo quote data for " + cleanSymbol);
-  }
 
   const bars = [];
 
@@ -361,35 +367,6 @@ async function yahooChart(symbol, range = "1y", interval = "1d") {
   return bars;
 }
 
-async function getBars(symbol, range = "1y", interval = "1d") {
-  const cleanSymbol = normalizeAsxSymbol(symbol);
-
-  if (!cleanSymbol.endsWith(".AX")) {
-    throw new Error("Only ASX Yahoo symbols are allowed, for example CBA.AX or CBA");
-  }
-
-  const key = cleanSymbol + "|" + range + "|" + interval;
-  const cached = getCache(key, cacheTtl(interval, range));
-
-  if (cached) return cached;
-
-  const bars = await yahooChart(cleanSymbol, range, interval);
-  validateBarsForAnalysis(cleanSymbol, bars);
-
-  const result = {
-    source: "Yahoo Finance public chart endpoint",
-    symbol: cleanSymbol,
-    range,
-    interval,
-    bars,
-    dataReality: ASX_CONFIG.dataDelay
-  };
-
-  setCache(key, result);
-
-  return result;
-}
-
 function validateBarsForAnalysis(symbol, bars) {
   if (!Array.isArray(bars) || bars.length < 35) {
     throw new Error(symbol + " has too few valid bars for analysis.");
@@ -425,6 +402,35 @@ function validateBarsForAnalysis(symbol, bars) {
   }
 
   return true;
+}
+
+async function getBars(symbol, range = "1y", interval = "1d") {
+  const cleanSymbol = normalizeAsxSymbol(symbol);
+
+  if (!cleanSymbol.endsWith(".AX")) {
+    throw new Error("Only ASX Yahoo symbols are allowed, for example CBA.AX or CBA");
+  }
+
+  const key = cleanSymbol + "|" + range + "|" + interval;
+  const cached = getCache(key, cacheTtl(interval, range));
+
+  if (cached) return cached;
+
+  const bars = await yahooChart(cleanSymbol, range, interval);
+  validateBarsForAnalysis(cleanSymbol, bars);
+
+  const result = {
+    source: "Yahoo Finance public chart endpoint",
+    symbol: cleanSymbol,
+    range,
+    interval,
+    bars,
+    dataReality: ASX_CONFIG.dataDelay
+  };
+
+  setCache(key, result);
+
+  return result;
 }
 
 function analyzeSymbol(symbol, bars, marketContext = { market: "Unknown" }, source = "unknown") {
@@ -497,6 +503,7 @@ function analyzeSymbol(symbol, bars, marketContext = { market: "Unknown" }, sour
   }
 
   add("trendPrice", price > ema20 ? 8 : 0, "Price is above EMA20.", "Price is below EMA20.");
+
   add(
     "trendStack",
     ema20 && ema50 && ema200 && ema20 > ema50 && ema50 > ema200
@@ -507,10 +514,12 @@ function analyzeSymbol(symbol, bars, marketContext = { market: "Unknown" }, sour
     "Moving averages are aligned bullishly.",
     "Moving averages are not fully aligned."
   );
+
   add("longTrend", ema200 && price > ema200 ? 6 : 0, "Price is above EMA200.", "Price is below EMA200 or EMA200 is unavailable.");
   add("recent5dMomentum", scoreRange(change5dPct, -1.5, 3.0, 14), "Recent 5 day price momentum is improving.", "Recent 5 day momentum is weak.");
   add("recent20dMomentum", scoreRange(change20dPct, -4.0, 8.0, 12), "Recent 20 day price momentum supports the setup.", "Recent 20 day momentum is weak.");
   add("rangePosition", scoreRange(rangePosition20, 35, 90, 10), "Price is in the stronger part of its 20 day range.", "Price is in the lower part of its 20 day range.");
+
   add(
     "rsi",
     rsi14 && rsi14 >= 48 && rsi14 <= 68
@@ -523,6 +532,7 @@ function analyzeSymbol(symbol, bars, marketContext = { market: "Unknown" }, sour
     "RSI supports momentum without being too stretched.",
     "RSI is not in the ideal swing zone."
   );
+
   add(
     "volume",
     volumeRatio && volumeRatio >= 1.5
@@ -535,6 +545,7 @@ function analyzeSymbol(symbol, bars, marketContext = { market: "Unknown" }, sour
     "Volume is confirming the move.",
     "Volume is not confirming the move."
   );
+
   add(
     "liquidity",
     avgDollarVolume20 && avgDollarVolume20 >= 20000000
@@ -545,6 +556,7 @@ function analyzeSymbol(symbol, bars, marketContext = { market: "Unknown" }, sour
     "ASX liquidity is acceptable to strong based on 20 day dollar volume.",
     "Liquidity may be thin for active trading."
   );
+
   add("nearBreakout", price >= high20 * 0.99 ? 7 : price >= high20 * 0.965 ? 4 : 0, "Price is near a recent breakout area.", "Price is not near a breakout area.");
   add("oneDayMove", changePercent && changePercent > 1 ? 4 : changePercent && changePercent > 0 ? 2 : 0, "Latest candle is positive.", "Latest candle is not positive.");
   add("acceleration", ema5Vs20Pct && ema5Vs20Pct > 0.6 ? 5 : ema5Vs20Pct && ema5Vs20Pct > 0 ? 3 : 0, "Short trend is accelerating above EMA20.", "Short trend is not accelerating.");
@@ -941,6 +953,7 @@ async function scanSymbols(symbolList, risk) {
     market: "ASX",
     marketRegime: marketContext.market,
     config: ASX_CONFIG,
+    paperAccount: PAPER_ACCOUNT,
     paperRules: PAPER_RULES,
     risk: Number(risk || 100),
     requested: symbolList.length,
@@ -997,6 +1010,7 @@ async function dayScanSymbols(symbolList) {
     market: "ASX",
     mode: "asx-day-paper-test",
     config: ASX_CONFIG,
+    paperAccount: PAPER_ACCOUNT,
     requested: symbolList.length,
     count: signals.length,
     elapsedMs: Date.now() - startedAt,
@@ -1015,7 +1029,8 @@ function readTrades() {
   ensureTradeFile();
 
   try {
-    return JSON.parse(fs.readFileSync(tradesPath, "utf8"));
+    const trades = JSON.parse(fs.readFileSync(tradesPath, "utf8"));
+    return Array.isArray(trades) ? trades : [];
   } catch (error) {
     return [];
   }
@@ -1033,6 +1048,35 @@ function openTradeCount(trades) {
 function hasOpenTradeForSymbol(trades, symbol) {
   const clean = normalizeAsxSymbol(symbol);
   return trades.some((t) => t.status === "open" && normalizeAsxSymbol(t.symbol) === clean);
+}
+
+function enrichTradeFinancials(trade) {
+  const entry = Number(trade.entry);
+  const shares = Number(trade.shares);
+  const stop = Number(trade.stop);
+  const target = Number(trade.target);
+  const side = String(trade.side || "long").toLowerCase();
+  const multiplier = side === "short" ? -1 : 1;
+
+  const cost = entry > 0 && shares > 0 ? entry * shares : 0;
+  const riskAmount =
+    entry > 0 && stop > 0 && shares > 0
+      ? Math.max(0, (entry - stop) * shares * multiplier)
+      : 0;
+
+  const targetProfit =
+    entry > 0 && target > 0 && shares > 0
+      ? Math.max(0, (target - entry) * shares * multiplier)
+      : 0;
+
+  trade.cost = round(cost, 2);
+  trade.capitalUsed = round(cost, 2);
+  trade.riskAmount = round(riskAmount, 2);
+  trade.targetProfit = round(targetProfit, 2);
+  trade.accountRiskPct = PAPER_ACCOUNT.startingBalance > 0 ? round((riskAmount / PAPER_ACCOUNT.startingBalance) * 100, 2) : 0;
+  trade.accountUsedPct = PAPER_ACCOUNT.startingBalance > 0 ? round((cost / PAPER_ACCOUNT.startingBalance) * 100, 2) : 0;
+
+  return trade;
 }
 
 function buildPaperTradeFromSignal(signal, source) {
@@ -1056,7 +1100,7 @@ function buildPaperTradeFromSignal(signal, source) {
 
   if (shares < 1) throw new Error("position size too small under current risk rules");
 
-  return {
+  const trade = {
     id: "ASX-" + Date.now() + "-" + Math.floor(Math.random() * 100000),
     status: "open",
     market: "ASX",
@@ -1074,6 +1118,8 @@ function buildPaperTradeFromSignal(signal, source) {
     openedAt: new Date().toISOString(),
     source
   };
+
+  return enrichTradeFinancials(trade);
 }
 
 function validatePaperTradeRequest(body) {
@@ -1101,6 +1147,66 @@ function validatePaperTradeRequest(body) {
   };
 }
 
+function paperAccountStats(trades) {
+  const enriched = trades.map((t) => enrichTradeFinancials({ ...t }));
+
+  const open = enriched.filter((t) => t.status === "open");
+  const closed = enriched.filter((t) => t.status === "closed");
+
+  const realisedPnl = closed.reduce((sum, t) => sum + Number(t.pnl || 0), 0);
+  const capitalInOpenTrades = open.reduce((sum, t) => sum + Number(t.capitalUsed || 0), 0);
+  const openRisk = open.reduce((sum, t) => sum + Number(t.riskAmount || 0), 0);
+  const openTargetReward = open.reduce((sum, t) => sum + Number(t.targetProfit || 0), 0);
+
+  const cashAvailable = PAPER_ACCOUNT.startingBalance + realisedPnl - capitalInOpenTrades;
+  const accountEquity = cashAvailable + capitalInOpenTrades;
+
+  const wins = closed.filter((t) => Number(t.pnl) > 0);
+  const losses = closed.filter((t) => Number(t.pnl) < 0);
+
+  const bySetup = {};
+
+  for (const t of closed) {
+    const key = t.setup || "unknown";
+    bySetup[key] = bySetup[key] || {
+      trades: 0,
+      wins: 0,
+      pnl: 0
+    };
+
+    bySetup[key].trades += 1;
+    if (Number(t.pnl) > 0) bySetup[key].wins += 1;
+    bySetup[key].pnl += Number(t.pnl || 0);
+  }
+
+  for (const key of Object.keys(bySetup)) {
+    bySetup[key].winRate = round((bySetup[key].wins / bySetup[key].trades) * 100, 2);
+    bySetup[key].pnl = round(bySetup[key].pnl, 2);
+  }
+
+  return {
+    startingBalance: PAPER_ACCOUNT.startingBalance,
+    currency: PAPER_ACCOUNT.currency,
+    cashAvailable: round(cashAvailable, 2),
+    capitalInOpenTrades: round(capitalInOpenTrades, 2),
+    accountEquity: round(accountEquity, 2),
+    realisedPnl: round(realisedPnl, 2),
+    openRisk: round(openRisk, 2),
+    openTargetReward: round(openTargetReward, 2),
+    openTrades: open.length,
+    closedTrades: closed.length,
+    totalTrades: enriched.length,
+    wins: wins.length,
+    losses: losses.length,
+    winRate: closed.length ? round((wins.length / closed.length) * 100, 2) : 0,
+    netPnl: round(realisedPnl, 2),
+    maxOpenTrades: PAPER_RULES.maxOpenTrades,
+    maxTradeValue: PAPER_RULES.maxTradeValue,
+    riskDollars: PAPER_RULES.riskDollars,
+    bySetup
+  };
+}
+
 async function autoPaperFromSignals({ sector, symbols, scanLimit, maxEntries }) {
   const base =
     sector && ASX_SECTORS[sector]
@@ -1113,6 +1219,8 @@ async function autoPaperFromSignals({ sector, symbols, scanLimit, maxEntries }) 
   const trades = readTrades();
   const opened = [];
   const blocked = [];
+
+  const account = paperAccountStats(trades);
 
   const candidates = result.signals
     .filter((s) => s.paperRules && s.paperRules.allowed)
@@ -1140,6 +1248,17 @@ async function autoPaperFromSignals({ sector, symbols, scanLimit, maxEntries }) 
 
     try {
       const trade = buildPaperTradeFromSignal(signal, "auto-paper-rules");
+
+      const currentAccount = paperAccountStats(trades);
+
+      if (Number(trade.capitalUsed || 0) > Number(currentAccount.cashAvailable || 0)) {
+        blocked.push({
+          symbol: signal.symbol,
+          reason: "Not enough paper cash available for this trade."
+        });
+        continue;
+      }
+
       trades.push(trade);
       opened.push(trade);
     } catch (error) {
@@ -1157,6 +1276,8 @@ async function autoPaperFromSignals({ sector, symbols, scanLimit, maxEntries }) 
     version: VERSION,
     mode: "auto-paper-rules",
     rules: PAPER_RULES,
+    accountBefore: account,
+    accountAfter: paperAccountStats(trades),
     scanned: result.count,
     openedCount: opened.length,
     blockedCount: blocked.length,
@@ -1452,6 +1573,7 @@ app.get("/api/health", (req, res) =>
     service: "TradingMint ASX Real",
     status: "online",
     config: ASX_CONFIG,
+    paperAccount: PAPER_ACCOUNT,
     paperRules: PAPER_RULES,
     routes: [
       "/api/scan",
@@ -1606,6 +1728,7 @@ app.get("/api/paper/rules", (req, res) => {
   res.json({
     ok: true,
     version: VERSION,
+    paperAccount: PAPER_ACCOUNT,
     rules: PAPER_RULES
   });
 });
@@ -1636,6 +1759,7 @@ app.post("/api/paper/open", async (req, res) => {
         ok: false,
         version: VERSION,
         error: "Trade blocked by paper-trading rules.",
+        paperAccount: PAPER_ACCOUNT,
         rules: PAPER_RULES,
         checks: validation.checks
       });
@@ -1651,7 +1775,7 @@ app.post("/api/paper/open", async (req, res) => {
       throw new Error("there is already an open paper trade for this symbol");
     }
 
-    const trade = {
+    const trade = enrichTradeFinancials({
       id: "ASX-" + Date.now(),
       status: "open",
       market: "ASX",
@@ -1668,7 +1792,13 @@ app.post("/api/paper/open", async (req, res) => {
       notes: String(req.body.notes || "Opened after paper-trading rule gate passed."),
       openedAt: new Date().toISOString(),
       source: "rule-gated paper trade"
-    };
+    });
+
+    const account = paperAccountStats(trades);
+
+    if (Number(trade.capitalUsed || 0) > Number(account.cashAvailable || 0)) {
+      throw new Error("not enough paper cash available for this trade");
+    }
 
     trades.push(trade);
     writeTrades(trades);
@@ -1676,7 +1806,8 @@ app.post("/api/paper/open", async (req, res) => {
     res.json({
       ok: true,
       version: VERSION,
-      trade
+      trade,
+      account: paperAccountStats(trades)
     });
   } catch (error) {
     res.status(400).json({
@@ -1734,12 +1865,14 @@ app.post("/api/paper/close", (req, res) => {
     trade.pnlPct = round(((exit - trade.entry) / trade.entry) * 100 * multiplier, 2);
     trade.exitReason = String(req.body.exitReason || "manual close");
 
+    enrichTradeFinancials(trade);
     writeTrades(trades);
 
     res.json({
       ok: true,
       version: VERSION,
-      trade
+      trade,
+      account: paperAccountStats(trades)
     });
   } catch (error) {
     res.status(400).json({
@@ -1750,54 +1883,25 @@ app.post("/api/paper/close", (req, res) => {
   }
 });
 
-app.get("/api/paper/trades", (req, res) =>
+app.get("/api/paper/trades", (req, res) => {
+  const trades = readTrades().map((t) => enrichTradeFinancials({ ...t }));
+
   res.json({
     ok: true,
     version: VERSION,
-    trades: readTrades().slice().reverse()
-  })
-);
+    account: paperAccountStats(trades),
+    trades: trades.slice().reverse()
+  });
+});
 
 app.get("/api/paper/stats", (req, res) => {
-  const trades = readTrades();
-  const closed = trades.filter((t) => t.status === "closed");
-  const open = trades.filter((t) => t.status === "open");
-  const wins = closed.filter((t) => Number(t.pnl) > 0);
-  const losses = closed.filter((t) => Number(t.pnl) < 0);
-
-  const bySetup = {};
-
-  for (const t of closed) {
-    const key = t.setup || "unknown";
-    bySetup[key] = bySetup[key] || {
-      trades: 0,
-      wins: 0,
-      pnl: 0
-    };
-
-    bySetup[key].trades += 1;
-    if (Number(t.pnl) > 0) bySetup[key].wins += 1;
-    bySetup[key].pnl += Number(t.pnl || 0);
-  }
-
-  for (const key of Object.keys(bySetup)) {
-    bySetup[key].winRate = round((bySetup[key].wins / bySetup[key].trades) * 100, 2);
-    bySetup[key].pnl = round(bySetup[key].pnl, 2);
-  }
+  const trades = readTrades().map((t) => enrichTradeFinancials({ ...t }));
 
   res.json({
     ok: true,
     version: VERSION,
-    stats: {
-      openTrades: open.length,
-      closedTrades: closed.length,
-      wins: wins.length,
-      losses: losses.length,
-      winRate: closed.length ? round((wins.length / closed.length) * 100, 2) : 0,
-      netPnl: round(closed.reduce((s, t) => s + Number(t.pnl || 0), 0), 2),
-      bySetup,
-      rules: PAPER_RULES
-    }
+    paperAccount: PAPER_ACCOUNT,
+    stats: paperAccountStats(trades)
   });
 });
 
