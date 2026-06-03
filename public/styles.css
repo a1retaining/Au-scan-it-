@@ -1107,3 +1107,53 @@ pre {
   border-color: rgba(52, 245, 155, .55);
   background: rgba(52, 245, 155, .09);
 }
+/* Final simplified $5,000 auto paper account layout */
+
+#paperPanel.paper-account-section {
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+#paperPanel .card-head {
+  order: 0 !important;
+}
+
+#paperPanel .compact-auto-status {
+  order: 1 !important;
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 10px !important;
+  margin: 10px 0 14px !important;
+}
+
+#paperPanel #paperStats {
+  order: 2 !important;
+}
+
+#paperPanel .auto-paper-divider,
+#paperPanel #autoWarnings,
+#paperPanel #autoPaperOutput {
+  display: none !important;
+}
+
+.clickable-paper-trade {
+  cursor: pointer;
+  transition: border-color .15s ease, background .15s ease, transform .15s ease;
+}
+
+.clickable-paper-trade:hover {
+  border-color: var(--cyan) !important;
+  background: rgba(66, 232, 255, .08) !important;
+  transform: translateY(-1px);
+}
+
+.selected-paper-trade {
+  border-color: var(--green) !important;
+  background: rgba(52, 245, 155, .10) !important;
+  box-shadow: 0 0 0 1px rgba(52, 245, 155, .22), 0 14px 38px rgba(0, 0, 0, .28);
+}
+
+.selected-paper-trade .trade-profit {
+  border-color: rgba(52, 245, 155, .55);
+  background: rgba(52, 245, 155, .09);
+}
