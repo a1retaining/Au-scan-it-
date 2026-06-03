@@ -4,7 +4,7 @@ const fs = require("fs");
 
 const app = express();
 const PORT = process.env.PORT || 10000;
-const VERSION = "tradingmint-asx-real-v12-backtest-brokerage-min-500";
+const VERSION = "tradingmint-asx-real-v13-keepalive-auto-refresh";
 
 const publicPath = path.join(__dirname, "public");
 const dataPath = path.join(__dirname, "data");
@@ -1783,10 +1783,13 @@ app.get("/api/health", (req, res) =>
       "/api/paper/trades",
       "/api/paper/stats",
       "/api/paper/rules",
-      "/api/paper/auto"
+      "/api/paper/auto",
+      "/api/ping",
+      "/api/keepalive"
     ],
     universeCount: ASX_DISCOVERY_UNIVERSE.length,
     cacheSize: chartCache.size,
+    uptimeSeconds: Math.round(process.uptime()),
     time: new Date().toISOString()
   })
 );
@@ -2119,6 +2122,27 @@ app.get("/api/universe", (req, res) =>
     symbols: ASX_DISCOVERY_UNIVERSE
   })
 );
+
+app.get("/api/ping", (req, res) => {
+  res.json({
+    ok: true,
+    version: VERSION,
+    status: "awake",
+    time: new Date().toISOString(),
+    uptimeSeconds: Math.round(process.uptime()),
+    message: "TradingMint ASX server is awake."
+  });
+});
+
+app.get("/api/keepalive", (req, res) => {
+  res.json({
+    ok: true,
+    version: VERSION,
+    status: "keepalive",
+    time: new Date().toISOString(),
+    uptimeSeconds: Math.round(process.uptime())
+  });
+});
 
 app.use(express.static(publicPath));
 
