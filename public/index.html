@@ -26,7 +26,7 @@
         </div>
       </div>
 
-      <div class="build-tag">AU-ASX-REAL-V10</div>
+      <div class="build-tag">AU-ASX-REAL-V11</div>
 
       <nav class="side-nav">
         <button class="nav active" data-mode="dashboard">▥ Dashboard</button>
@@ -67,8 +67,8 @@
         <div class="session-main">
           <span class="dot"></span>
           <div>
-            <strong id="sessionState">ASX DATA</strong>
-            <small id="sessionTimer">Near-live public chart feed where available</small>
+            <strong id="sessionState">ASX CLOSED</strong>
+            <small id="sessionTimer">Checking Sydney market clock...</small>
           </div>
         </div>
 
@@ -120,7 +120,7 @@
         <article class="metric-card mini-metric-card">
           <span>Rules</span>
           <strong>80 / 1.8R</strong>
-          <small>Score and R:R gate</small>
+          <small>$500 min trade + brokerage</small>
         </article>
       </section>
 
@@ -192,15 +192,24 @@
           <div>
             <h3>AUTO PAPER ACCOUNT</h3>
             <small>
-              One combined section for the auto trader, $5,000 paper account, warnings, open trades, cash, capital used, risk and realised P/L.
+              Paper account first. Auto paper trader below. Brokerage, $500 minimum trade value, cash, risk and profit are shown clearly.
             </small>
           </div>
 
           <div class="auto-trader-actions">
             <button id="autoToggleBtn">Auto Trader: ON</button>
             <button id="autoRunNowBtn" class="secondary">Run Auto Now</button>
-            <button class="mini" id="paperAutoPanelBtn">Refresh Paper</button>
+            <button class="mini" id="paperAutoPanelBtn">Run Auto Paper</button>
           </div>
+        </div>
+
+        <div id="paperStats" class="paper-grid">
+          Loading paper account...
+        </div>
+
+        <div class="auto-paper-divider">
+          <h3>AUTO PAPER TRADER</h3>
+          <small>Runs below the $5,000 paper account. It watches for entries, opens qualifying paper trades and warns near exits.</small>
         </div>
 
         <div class="auto-trader-grid">
@@ -228,16 +237,12 @@
         <div id="autoWarnings" class="auto-warning-list">
           <div class="paper-trade">
             <strong>Waiting for rule-gated setups</strong>
-            <small>Score 80+ and R:R 1.8+ required before the system opens a paper trade.</small>
+            <small>Score 80+, R:R 1.8+, $500 minimum trade value and brokerage rules must pass.</small>
           </div>
         </div>
 
         <div id="autoPaperOutput" class="auto-paper-box">
           <p class="muted">Auto paper has not run yet.</p>
-        </div>
-
-        <div id="paperStats" class="paper-grid">
-          Loading paper account...
         </div>
       </section>
 
