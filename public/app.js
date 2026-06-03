@@ -346,7 +346,7 @@ function renderDetail(s) {
   if (!s) {
     $("detail").innerHTML =
       `<h3>SETUP DECISION</h3>
-      <p class="muted">Select a signal to inspect entry, stop, target, score breakdown and rule gate. This is not the account.</p>`;
+      <p class="muted">Select a signal to inspect entry, stop, target, score breakdown and rule gate. This is not the paper account.</p>`;
     return;
   }
 
@@ -1135,6 +1135,7 @@ function setupNav() {
         chart: "chartPanel",
         scan: "scanPanel",
         paper: "paperPanel",
+        auto: "autoTraderPanel",
         journal: "paperPanel",
         performance: "paperPanel",
         settings: "settingsPanel",
