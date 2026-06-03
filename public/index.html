@@ -147,6 +147,47 @@
         <canvas id="chart" width="1500" height="620"></canvas>
       </section>
 
+      <section class="dashboard-grid scanner-under-chart" id="scanPanel">
+        <div class="card scanner-card">
+          <div class="card-head">
+            <div>
+              <h3>LIVE ASX SCANNER <span>(ranked by rule quality)</span></h3>
+              <small id="meta">No scan yet</small>
+            </div>
+
+            <button class="mini" id="clearSelect">Clear</button>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Rank</th>
+                  <th>Ticker</th>
+                  <th>Setup</th>
+                  <th>Score</th>
+                  <th>R:R</th>
+                  <th>Trend</th>
+                  <th>Price</th>
+                  <th>Entry area</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="signals"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <aside class="right-stack sticky-trade-panel">
+          <div class="card detail-card" id="detail">
+            <h3>SETUP DECISION</h3>
+            <p class="muted">
+              Select a signal to inspect entry, stop, target, score breakdown and rule gate. This does not hold the paper account.
+            </p>
+          </div>
+        </aside>
+      </section>
+
       <section class="card auto-trader-panel full-paper-line" id="autoTraderPanel">
         <div class="auto-trader-head">
           <div>
@@ -209,47 +250,6 @@
         </div>
       </section>
 
-      <section class="dashboard-grid" id="scanPanel">
-        <div class="card scanner-card">
-          <div class="card-head">
-            <div>
-              <h3>LIVE ASX SCANNER <span>(ranked by rule quality)</span></h3>
-              <small id="meta">No scan yet</small>
-            </div>
-
-            <button class="mini" id="clearSelect">Clear</button>
-          </div>
-
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Rank</th>
-                  <th>Ticker</th>
-                  <th>Setup</th>
-                  <th>Score</th>
-                  <th>R:R</th>
-                  <th>Trend</th>
-                  <th>Price</th>
-                  <th>Entry area</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody id="signals"></tbody>
-            </table>
-          </div>
-        </div>
-
-        <aside class="right-stack sticky-trade-panel">
-          <div class="card detail-card" id="detail">
-            <h3>SETUP DECISION</h3>
-            <p class="muted">
-              Select a signal to inspect entry, stop, target, score breakdown and rule gate. This does not hold the paper account.
-            </p>
-          </div>
-        </aside>
-      </section>
-
       <section class="dashboard-grid lower" id="sectorsPanel">
         <div class="card indices">
           <h3>MARKET SNAPSHOT</h3>
@@ -268,7 +268,7 @@
         <div class="settings-head">
           <div>
             <h3>Scanner Settings</h3>
-            <small>Set and forget. Kept lower so the chart, paper account and scanner stay up top.</small>
+            <small>Set and forget. Kept lower so the chart, scanner and paper account stay up top.</small>
           </div>
 
           <button id="dayBtn" class="secondary">Day scan</button>
