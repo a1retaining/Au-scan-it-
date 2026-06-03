@@ -4,7 +4,7 @@ const fs = require("fs");
 
 const app = express();
 const PORT = process.env.PORT || 10000;
-const VERSION = "tradingmint-asx-real-v8-auto-paper-rules";
+const VERSION = "tradingmint-asx-real-v9-data-validated-auto-paper";
 const publicPath = path.join(__dirname, "public");
 const dataPath = path.join(__dirname, "data");
 const tradesPath = path.join(dataPath, "paper-trades.json");
@@ -199,13 +199,18 @@ function calcRiskReward(entry, stop, target) {
   target = Number(target);
 
   if (!Number.isFinite(entry) || !Number.isFinite(stop) || !Number.isFinite(target)) return 0;
+  if (entry <= 0 || stop <= 0 || target <= 0) return 0;
 
   const risk = entry - stop;
   const reward = target - entry;
 
   if (risk <= 0 || reward <= 0) return 0;
 
-  return reward / risk;
+  const rr = reward / risk;
+
+  if (!Number.isFinite(rr) || rr <= 0 || rr > 20) return 0;
+
+  return rr;
 }
 
 function safeDate(timestamp, interval) {
@@ -325,7 +330,16 @@ async function yahooChart(symbol, range = "1y", interval = "1d") {
       Number.isFinite(open) &&
       Number.isFinite(high) &&
       Number.isFinite(low) &&
-      Number.isFinite(close)
+      Number.isFinite(close) &&
+      open > 0 &&
+      high > 0 &&
+      low > 0 &&
+      close > 0 &&
+      high >= low &&
+      high >= open &&
+      high >= close &&
+      low <= open &&
+      low <= close
     ) {
       bars.push({
         date: safeDate(timestamps[i], interval),
@@ -341,7 +355,7 @@ async function yahooChart(symbol, range = "1y", interval = "1d") {
   const minBars = String(interval).includes("m") || String(interval).includes("h") ? 2 : 35;
 
   if (bars.length < minBars) {
-    throw new Error("Yahoo returned too few bars for " + cleanSymbol);
+    throw new Error("Yahoo returned too few valid bars for " + cleanSymbol);
   }
 
   return bars;
@@ -360,6 +374,7 @@ async function getBars(symbol, range = "1y", interval = "1d") {
   if (cached) return cached;
 
   const bars = await yahooChart(cleanSymbol, range, interval);
+  validateBarsForAnalysis(cleanSymbol, bars);
 
   const result = {
     source: "Yahoo Finance public chart endpoint",
@@ -375,14 +390,58 @@ async function getBars(symbol, range = "1y", interval = "1d") {
   return result;
 }
 
+function validateBarsForAnalysis(symbol, bars) {
+  if (!Array.isArray(bars) || bars.length < 35) {
+    throw new Error(symbol + " has too few valid bars for analysis.");
+  }
+
+  const last = bars[bars.length - 1];
+
+  if (!last || !Number.isFinite(Number(last.close)) || Number(last.close) <= 0) {
+    throw new Error(symbol + " has invalid latest price.");
+  }
+
+  const bad = bars.filter((b) => {
+    return (
+      !b ||
+      !Number.isFinite(Number(b.open)) ||
+      !Number.isFinite(Number(b.high)) ||
+      !Number.isFinite(Number(b.low)) ||
+      !Number.isFinite(Number(b.close)) ||
+      Number(b.open) <= 0 ||
+      Number(b.high) <= 0 ||
+      Number(b.low) <= 0 ||
+      Number(b.close) <= 0 ||
+      Number(b.high) < Number(b.low) ||
+      Number(b.high) < Number(b.open) ||
+      Number(b.high) < Number(b.close) ||
+      Number(b.low) > Number(b.open) ||
+      Number(b.low) > Number(b.close)
+    );
+  });
+
+  if (bad.length > 0) {
+    throw new Error(symbol + " contains invalid zero/blank OHLC bars.");
+  }
+
+  return true;
+}
+
 function analyzeSymbol(symbol, bars, marketContext = { market: "Unknown" }, source = "unknown") {
+  validateBarsForAnalysis(symbol, bars);
+
   const closes = bars.map((b) => b.close).filter(Number.isFinite);
   const volumes = bars.map((b) => b.volume || 0).filter(Number.isFinite);
 
   const last = bars[bars.length - 1];
   const previous = bars[bars.length - 2];
 
-  const price = last.close;
+  const price = Number(last.close);
+
+  if (!Number.isFinite(price) || price <= 0) {
+    throw new Error(symbol + " invalid latest price.");
+  }
+
   const previousClose = previous ? previous.close : null;
 
   const ema5 = ema(closes, 5);
@@ -516,6 +575,10 @@ function analyzeSymbol(symbol, bars, marketContext = { market: "Unknown" }, sour
 
   let stop = Math.min(buyZoneLow - atr * 0.35, low10 - atr * 0.12);
 
+  if (!Number.isFinite(stop) || stop <= 0 || stop >= price) {
+    stop = price - atr * 1.55;
+  }
+
   let target1 = Math.max(
     high20 + atr * 0.75,
     price + atr * 2.75,
@@ -528,7 +591,6 @@ function analyzeSymbol(symbol, bars, marketContext = { market: "Unknown" }, sour
     price + (price - stop) * 2.8
   );
 
-  if (!Number.isFinite(stop) || stop <= 0 || stop >= price) stop = price - atr * 1.55;
   if (!Number.isFinite(target1) || target1 <= price) target1 = price + atr * 2.75;
   if (!Number.isFinite(target2) || target2 <= target1) target2 = price + atr * 4.0;
 
@@ -651,7 +713,7 @@ function evaluateSignalForPaperTrade(signal) {
     {
       name: "Risk reward",
       pass: rr >= PAPER_RULES.minRiskReward,
-      actual: rr,
+      actual: round(rr, 2),
       required: PAPER_RULES.minRiskReward
     },
     {
@@ -684,11 +746,18 @@ function evaluateSignalForPaperTrade(signal) {
 }
 
 function analyzeIntradaySymbol(symbol, bars, source) {
+  validateBarsForAnalysis(symbol, bars);
+
   const closes = bars.map((b) => b.close).filter(Number.isFinite);
   const last = bars[bars.length - 1];
   const previous = bars[bars.length - 2];
 
-  const price = last.close;
+  const price = Number(last.close);
+
+  if (!Number.isFinite(price) || price <= 0) {
+    throw new Error(symbol + " invalid latest intraday price.");
+  }
+
   const previousClose = previous ? previous.close : null;
 
   const ema8 = ema(closes, 8);
@@ -837,9 +906,15 @@ async function scanSymbols(symbolList, risk) {
   const results = await mapLimit(symbolList, 6, async (symbol) => {
     try {
       const result = await getBars(symbol, "1y", "1d");
+      const signal = analyzeSymbol(symbol, result.bars, marketContext, result.source);
+
+      if (!Number.isFinite(Number(signal.price)) || Number(signal.price) <= 0) {
+        throw new Error(symbol + " produced invalid zero price after analysis.");
+      }
+
       return {
         ok: true,
-        signal: analyzeSymbol(symbol, result.bars, marketContext, result.source)
+        signal
       };
     } catch (error) {
       return {
@@ -883,9 +958,15 @@ async function dayScanSymbols(symbolList) {
   const results = await mapLimit(symbolList, 6, async (symbol) => {
     try {
       const result = await getBars(symbol, "1d", "15m");
+      const signal = analyzeIntradaySymbol(symbol, result.bars, result.source);
+
+      if (!Number.isFinite(Number(signal.price)) || Number(signal.price) <= 0) {
+        throw new Error(symbol + " produced invalid zero intraday price after analysis.");
+      }
+
       return {
         ok: true,
-        signal: analyzeIntradaySymbol(symbol, result.bars, result.source)
+        signal
       };
     } catch (error) {
       return {
@@ -965,6 +1046,9 @@ function buildPaperTradeFromSignal(signal, source) {
   if (!Number.isFinite(stop) || stop <= 0 || stop >= price) throw new Error("valid stop below entry is required");
   if (!Number.isFinite(target) || target <= price) throw new Error("valid target above entry is required");
 
+  const rr = calcRiskReward(price, stop, target);
+  if (rr < PAPER_RULES.minRiskReward) throw new Error("risk reward is below auto paper rule.");
+
   const riskPerShare = price - stop;
   const sharesByValue = Math.floor(PAPER_RULES.maxTradeValue / price);
   const sharesByRisk = Math.floor(PAPER_RULES.riskDollars / riskPerShare);
@@ -984,7 +1068,7 @@ function buildPaperTradeFromSignal(signal, source) {
     target: round(target, 4),
     setup: String(signal.setup || "ASX auto paper"),
     score: Number(signal.score || 0),
-    riskReward: round(calcRiskReward(price, stop, target), 2),
+    riskReward: round(rr, 2),
     decision: String(signal.decision || ""),
     notes: "Opened only after paper-trading rule gate passed.",
     openedAt: new Date().toISOString(),
@@ -1032,6 +1116,7 @@ async function autoPaperFromSignals({ sector, symbols, scanLimit, maxEntries }) 
 
   const candidates = result.signals
     .filter((s) => s.paperRules && s.paperRules.allowed)
+    .filter((s) => Number(s.price) > 0 && Number(s.stopLoss) > 0 && Number(s.target1) > 0)
     .sort((a, b) => Number(b.score || 0) - Number(a.score || 0));
 
   for (const signal of candidates) {
@@ -1078,6 +1163,7 @@ async function autoPaperFromSignals({ sector, symbols, scanLimit, maxEntries }) 
     opened,
     blocked,
     topCandidates: candidates.slice(0, 10),
+    errors: result.errors,
     updatedAt: new Date().toISOString()
   };
 }
