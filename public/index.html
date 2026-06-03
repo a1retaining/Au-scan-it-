@@ -15,7 +15,11 @@
   <div class="app-shell">
     <aside class="sidebar">
       <div class="brand-block">
-        <div class="brand-mark"><span>TRADING</span><strong>MINT</strong></div>
+        <div class="brand-mark">
+          <span>TRADING</span>
+          <strong>MINT</strong>
+        </div>
+
         <div>
           <h1>PRO ASX</h1>
           <p>AUTOMATED PAPER SYSTEM</p>
@@ -68,11 +72,30 @@
           </div>
         </div>
 
-        <div><span>Market Regime</span><strong id="marketRegime">WAITING</strong></div>
-        <div><span>ASX Trend</span><strong id="trendStat">SCANNING</strong></div>
-        <div><span>Sector Leader</span><strong id="sectorStat">-</strong></div>
-        <div><span>Auto Paper</span><strong id="autoPaperState" class="live">RULES ON</strong></div>
-        <div><span>Last Update</span><strong id="updatedStat">Waiting</strong></div>
+        <div>
+          <span>Market Regime</span>
+          <strong id="marketRegime">WAITING</strong>
+        </div>
+
+        <div>
+          <span>ASX Trend</span>
+          <strong id="trendStat">SCANNING</strong>
+        </div>
+
+        <div>
+          <span>Sector Leader</span>
+          <strong id="sectorStat">-</strong>
+        </div>
+
+        <div>
+          <span>Auto Paper</span>
+          <strong id="autoPaperState" class="live">RULES ON</strong>
+        </div>
+
+        <div>
+          <span>Last Update</span>
+          <strong id="updatedStat">Waiting</strong>
+        </div>
       </section>
 
       <section class="mini-metric-row compact-metrics">
@@ -123,6 +146,49 @@
         <canvas id="chart" width="1500" height="620"></canvas>
       </section>
 
+      <section class="card auto-trader-panel" id="autoTraderPanel">
+        <div class="auto-trader-head">
+          <div>
+            <h3>AUTO PAPER TRADER</h3>
+            <small>Runs rule-gated paper entries and warns before entry/exit.</small>
+          </div>
+
+          <div class="auto-trader-actions">
+            <button id="autoToggleBtn">Auto Trader: ON</button>
+            <button id="autoRunNowBtn" class="secondary">Run Auto Now</button>
+          </div>
+        </div>
+
+        <div class="auto-trader-grid">
+          <div class="small-metric">
+            <span>Status</span>
+            <strong id="autoTraderStatus">ON</strong>
+          </div>
+
+          <div class="small-metric">
+            <span>Next scan</span>
+            <strong id="autoNextScan">60s</strong>
+          </div>
+
+          <div class="small-metric">
+            <span>Entry warnings</span>
+            <strong id="entryWarnings">0</strong>
+          </div>
+
+          <div class="small-metric">
+            <span>Exit warnings</span>
+            <strong id="exitWarnings">0</strong>
+          </div>
+        </div>
+
+        <div id="autoWarnings" class="auto-warning-list">
+          <div class="paper-trade">
+            <strong>Waiting for rule-gated setups</strong>
+            <small>Score 80+ and R:R 1.8+ required.</small>
+          </div>
+        </div>
+      </section>
+
       <section class="dashboard-grid" id="scanPanel">
         <div class="card scanner-card">
           <div class="card-head">
@@ -130,6 +196,7 @@
               <h3>LIVE ASX SCANNER <span>(ranked by rule quality)</span></h3>
               <small id="meta">No scan yet</small>
             </div>
+
             <button class="mini" id="clearSelect">Clear</button>
           </div>
 
@@ -164,9 +231,10 @@
           <div class="card paper-card" id="paperPanel">
             <div class="card-head">
               <div>
-                <h3>Auto Paper Trading Desk</h3>
-                <small>Only opens trades that pass the rule gate.</small>
+                <h3>Paper Account</h3>
+                <small>Open trades, closed trades and rule-gated entries.</small>
               </div>
+
               <button class="mini" id="paperAutoPanelBtn">Run Auto</button>
             </div>
 
@@ -197,8 +265,9 @@
         <div class="settings-head">
           <div>
             <h3>Scanner Settings</h3>
-            <small>Set and forget. Keep this lower so the chart and scanner stay up top.</small>
+            <small>Set and forget. Kept lower so the chart and scanner stay up top.</small>
           </div>
+
           <button id="dayBtn" class="secondary">Day scan</button>
         </div>
 
