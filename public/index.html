@@ -9,7 +9,7 @@
 
 <body>
   <div class="tickerbar" id="tickerbar">
-    ASX NEAR-LIVE PUBLIC CHART MODE • NO FAKE OPTION CHAINS • AUTO PAPER ONLY • AUD
+    ASX NEAR-LIVE PUBLIC CHART MODE • NO FAKE OPTION CHAINS • $5,000 AUTO PAPER ACCOUNT • AUD
   </div>
 
   <div class="app-shell">
@@ -26,13 +26,13 @@
         </div>
       </div>
 
-      <div class="build-tag">AU-ASX-REAL-V11</div>
+      <div class="build-tag">AU-ASX-REAL-V12</div>
 
       <nav class="side-nav">
         <button class="nav active" data-mode="dashboard">▥ Dashboard</button>
         <button class="nav" data-mode="chart">▤ Chart</button>
         <button class="nav" data-mode="scan">⌕ Live scanner</button>
-        <button class="nav" data-mode="paper">⚙ Auto paper account</button>
+        <button class="nav" data-mode="paper">⚙ $5,000 auto account</button>
         <button class="nav" data-mode="journal">▤ Trade journal</button>
         <button class="nav" data-mode="performance">▥ Performance</button>
         <button class="nav" data-mode="settings">⚙ Scanner settings</button>
@@ -43,9 +43,9 @@
       <div class="quick-card">
         <h3>Quick Actions</h3>
         <button id="scanBtn">Run ASX Scan <span>READY</span></button>
-        <button id="autoPaperBtn">Run Auto Paper <span>RULED</span></button>
+        <button id="autoPaperBtn">Run $5,000 Auto <span>RULED</span></button>
         <button id="refreshBtn">Refresh Market <span>READY</span></button>
-        <button id="paperBtn">Paper Account <span>LIVE</span></button>
+        <button id="paperBtn">$5,000 Account <span>LIVE</span></button>
         <button id="runBacktest">Run Backtest <span>READY</span></button>
       </div>
     </aside>
@@ -53,13 +53,13 @@
     <main class="main">
       <header class="topbar compact-topbar">
         <div>
-          <p class="eyebrow">Australia-only paper trading desk</p>
+          <p class="eyebrow">Australia-only automated paper trading desk</p>
           <h2>TRADINGMINT PRO <span>ASX DESK</span></h2>
         </div>
 
         <div class="top-actions">
           <button id="voiceBtn" class="secondary">Enable sound & voice</button>
-          <button id="topAutoPaperBtn">Auto Paper</button>
+          <button id="topAutoPaperBtn">Run $5,000 Auto</button>
         </div>
       </header>
 
@@ -88,7 +88,7 @@
         </div>
 
         <div>
-          <span>Auto Paper</span>
+          <span>$5,000 Auto</span>
           <strong id="autoPaperState" class="live">RULES ON</strong>
         </div>
 
@@ -181,7 +181,7 @@
           <div class="card detail-card" id="detail">
             <h3>SETUP DECISION</h3>
             <p class="muted">
-              Select a signal to inspect entry, stop, target, score breakdown and rule gate. This does not hold the paper account.
+              Select a signal to inspect entry, stop, target, score breakdown and rule gate. The $5,000 paper account is fully automatic.
             </p>
           </div>
         </aside>
@@ -190,31 +190,20 @@
       <section class="card paper-account-section full-paper-line" id="paperPanel">
         <div class="card-head">
           <div>
-            <h3>$5,000 PAPER ACCOUNT</h3>
+            <h3>$5,000 AUTO PAPER ACCOUNT</h3>
             <small>
-              Paper account first. Shows cash, trade value, brokerage, open trades, risk, target profit and realised net P/L.
+              Fully automatic rule-based paper account. Trades are opened only when the scanner rules pass. Click any auto trade to show entry, exit, time, brokerage and profit on the chart.
             </small>
           </div>
 
           <div class="auto-trader-actions">
             <button id="autoToggleBtn">Auto Trader: ON</button>
             <button id="autoRunNowBtn" class="secondary">Run Auto Now</button>
-            <button class="mini" id="paperAutoPanelBtn">Run Auto Paper</button>
+            <button class="mini" id="paperAutoPanelBtn">Run $5,000 Auto</button>
           </div>
         </div>
 
-        <div id="paperStats" class="paper-grid">
-          Loading paper account...
-        </div>
-
-        <div class="auto-paper-divider">
-          <h3>AUTO PAPER TRADER</h3>
-          <small>
-            Runs below the account. Watches for entries, opens qualifying paper trades and warns near exits.
-          </small>
-        </div>
-
-        <div class="auto-trader-grid">
+        <div class="auto-trader-grid compact-auto-status">
           <div class="small-metric">
             <span>Status</span>
             <strong id="autoTraderStatus">ON</strong>
@@ -236,15 +225,8 @@
           </div>
         </div>
 
-        <div id="autoWarnings" class="auto-warning-list">
-          <div class="paper-trade">
-            <strong>Waiting for rule-gated setups</strong>
-            <small>Score 80+, R:R 1.8+, $500 minimum trade value and brokerage rules must pass.</small>
-          </div>
-        </div>
-
-        <div id="autoPaperOutput" class="auto-paper-box">
-          <p class="muted">Auto paper has not run yet.</p>
+        <div id="paperStats" class="paper-grid">
+          Loading $5,000 auto paper account...
         </div>
       </section>
 
@@ -266,7 +248,7 @@
         <div class="settings-head">
           <div>
             <h3>Scanner Settings</h3>
-            <small>Set and forget. Kept lower so the chart, scanner and paper account stay up top.</small>
+            <small>Set and forget. Kept lower so the chart, scanner and $5,000 auto account stay up top.</small>
           </div>
 
           <button id="dayBtn" class="secondary">Day scan</button>
