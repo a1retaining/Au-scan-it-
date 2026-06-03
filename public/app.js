@@ -184,17 +184,50 @@ function getPaperTradeById(id) {
   return paperTradesCache.find((t) => String(t.id) === String(id)) || null;
 }
 
+function bindPaperTradeClicks() {
+  document.querySelectorAll(".clickable-paper-trade").forEach((card) => {
+    card.onclick = async (event) => {
+      const ignore = event.target.closest("button, input, select, textarea");
+      if (ignore) return;
+
+      const tradeId = card.dataset.tradeId;
+      const symbol = card.dataset.symbol;
+
+      if (!tradeId) {
+        toast("No trade ID found on this card.");
+        return;
+      }
+
+      await selectPaperTrade(tradeId, symbol);
+    };
+  });
+}
+
 async function selectPaperTrade(id, symbol) {
-  selectedPaperTradeId = id;
+  selectedPaperTradeId = String(id);
 
   document.querySelectorAll(".paper-trade").forEach((el) => {
-    el.classList.toggle("selected-paper-trade", el.dataset.tradeId === String(id));
+    el.classList.toggle("selected-paper-trade", el.dataset.tradeId === selectedPaperTradeId);
   });
 
-  const trade = getPaperTradeById(id);
+  let trade = getPaperTradeById(selectedPaperTradeId);
+
+  if (!trade) {
+    try {
+      const fresh = await getJson("/api/paper/trades");
+      paperTradesCache = fresh.trades || [];
+      trade = getPaperTradeById(selectedPaperTradeId);
+    } catch (e) {
+      toast("Could not reload paper trades: " + e.message);
+    }
+  }
+
   const cleanSymbol = symbol || (trade && trade.symbol);
 
-  if (!cleanSymbol) return;
+  if (!cleanSymbol) {
+    toast("Could not find that paper trade.");
+    return;
+  }
 
   const existingSignal = lastSignals.find((s) => shortSymbol(s.symbol) === shortSymbol(cleanSymbol));
 
@@ -203,7 +236,7 @@ async function selectPaperTrade(id, symbol) {
   } else if (trade) {
     selectedSignal = {
       symbol: trade.symbol,
-      setup: trade.setup || "Paper trade",
+      setup: trade.setup || "Auto paper trade",
       price: Number(trade.exit || trade.entry || 0),
       buyZoneLow: Number(trade.entry || 0),
       buyZoneHigh: Number(trade.entry || 0),
@@ -214,7 +247,7 @@ async function selectPaperTrade(id, symbol) {
       score: Number(trade.score || 0),
       change5dPct: 0,
       change20dPct: 0,
-      reasons: ["Loaded from paper trade history."],
+      reasons: ["Loaded from $5,000 auto paper account."],
       warnings: [],
       scoreParts: [],
       paperRules: {
@@ -232,6 +265,7 @@ async function selectPaperTrade(id, symbol) {
     renderDetail(selectedSignal);
     await loadChart(selectedSignal.symbol);
     document.getElementById("chartPanel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    toast(`Showing ${shortSymbol(cleanSymbol)} paper trade on chart.`);
   }
 }
 
@@ -538,7 +572,7 @@ function renderDetail(s) {
   if (!s) {
     $("detail").innerHTML =
       `<h3>SETUP DECISION</h3>
-      <p class="muted">Select a signal to inspect entry, stop, target, score breakdown and rule gate. This is not the paper account.</p>`;
+      <p class="muted">Select a signal to inspect entry, stop, target, score breakdown and rule gate. The $5,000 paper account is fully automatic.</p>`;
     return;
   }
 
@@ -573,13 +607,12 @@ function renderDetail(s) {
     </div>
 
     <div class="button-row">
-      <button class="secondary" onclick="openPaperTrade('${s.symbol}')">Send to Paper Account</button>
       <button class="secondary" onclick="runAutoPaper()">Run Auto Paper</button>
       <button class="secondary" onclick="document.getElementById('chartPanel').scrollIntoView({behavior:'smooth'})">View Chart</button>
       <button class="secondary" onclick="checkOptions('${s.symbol}')">Check Options Reality</button>
     </div>
 
-    <h4>Paper Trade Rule Gate</h4>
+    <h4>Auto Paper Rule Gate</h4>
     <div class="snapshot-list">${renderRuleChecks(s)}</div>
 
     <h4>Why it ranked</h4>
@@ -781,14 +814,14 @@ function drawChart(s, incomingBars, sourceLabel) {
         ? `NET P/L ${signedMoney(t.pnl)} | Fees ${money(t.totalBrokerFees)}`
         : `TARGET PROFIT ${signedMoney(t.targetProfit)}`;
 
-    line(t.entry, "#42e8ff", isSelectedTrade ? "SELECTED PAPER ENTRY" : "PAPER ENTRY", isSelectedTrade ? 3 : 2.2);
-    line(t.stop, "#ff5d5d", "PAPER STOP", isSelectedTrade ? 2.2 : 1.8);
-    line(t.target, "#34f59b", "PAPER TARGET", isSelectedTrade ? 2.2 : 1.8);
+    line(t.entry, "#42e8ff", isSelectedTrade ? "SELECTED AUTO ENTRY" : "AUTO ENTRY", isSelectedTrade ? 3 : 2.2);
+    line(t.stop, "#ff5d5d", "AUTO STOP", isSelectedTrade ? 2.2 : 1.8);
+    line(t.target, "#34f59b", "AUTO TARGET", isSelectedTrade ? 2.2 : 1.8);
 
     badge(t.entry, "#1c79ff", entryLabel, false, isSelectedTrade ? -16 : 0);
 
     if (isGoodNumber(t.exit) && Number(t.exit) > 0) {
-      line(t.exit, "#ffc857", isSelectedTrade ? "SELECTED PAPER EXIT" : "PAPER EXIT", isSelectedTrade ? 3 : 2.2);
+      line(t.exit, "#ffc857", isSelectedTrade ? "SELECTED AUTO EXIT" : "AUTO EXIT", isSelectedTrade ? 3 : 2.2);
       badge(t.exit, "#ffc857", exitLabel, true, isSelectedTrade ? 16 : 0);
     }
 
@@ -820,7 +853,7 @@ function drawChart(s, incomingBars, sourceLabel) {
 
   if ($("chartMeta")) {
     $("chartMeta").textContent =
-      `${shortSymbol(s.symbol)} | ${bars.length} bars | ${currentRange} / ${currentInterval} | Click a paper trade to show bought time, sold time, entry, exit and profit`;
+      `${shortSymbol(s.symbol)} | ${bars.length} bars | ${currentRange} / ${currentInterval} | Click an auto trade to show bought time, sold time, entry, exit and profit`;
   }
 }
 
@@ -880,7 +913,7 @@ async function runAutoPaper() {
 
     const openedHtml = (json.opened || [])
       .map(
-        (t) => `<div class="paper-trade clickable-paper-trade ${String(t.id) === String(selectedPaperTradeId) ? "selected-paper-trade" : ""}" data-trade-id="${t.id}" onclick="selectPaperTrade('${t.id}', '${t.symbol}')">
+        (t) => `<div class="paper-trade clickable-paper-trade ${String(t.id) === String(selectedPaperTradeId) ? "selected-paper-trade" : ""}" data-trade-id="${t.id}" data-symbol="${t.symbol}">
           <div class="paper-trade-head">
             <strong>${shortSymbol(t.symbol)} AUTO OPENED</strong>
             <small>${t.setup}</small>
@@ -947,6 +980,8 @@ async function runAutoPaper() {
       </div>`;
     }
 
+    bindPaperTradeClicks();
+
     if (Number(json.openedCount || 0) > 0) {
       const first = json.opened[0];
       selectedPaperTradeId = first.id;
@@ -974,59 +1009,6 @@ async function runAutoPaper() {
   }
 }
 
-async function openPaperTrade(symbol) {
-  const s = lastSignals.find((x) => x.symbol === symbol);
-  if (!s) return;
-
-  try {
-    const price = Math.max(Number(s.price || 0), 0);
-    const minTradeValue = 500;
-    const shares = price > 0 ? Math.max(1, Math.ceil(minTradeValue / price)) : 0;
-
-    const response = await fetch("/api/paper/open", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        symbol,
-        side: "long",
-        entry: s.price,
-        shares,
-        stop: s.stopLoss,
-        target: s.target1,
-        setup: s.setup,
-        score: s.score,
-        riskReward: s.riskReward,
-        decision: s.decision,
-        buyZoneHigh: s.buyZoneHigh,
-        distanceToBuyZonePct: s.distanceToBuyZonePct,
-        change5dPct: s.change5dPct,
-        change20dPct: s.change20dPct
-      })
-    });
-
-    const json = await response.json();
-
-    if (!response.ok || json.ok === false) {
-      const reason = json.checks
-        ? json.checks.map((c) => `${c.name}: ${c.pass ? "PASS" : "BLOCK"}`).join(", ")
-        : json.error || "Paper entry failed";
-
-      throw new Error(reason);
-    }
-
-    const account = json.account || {};
-    const trade = json.trade || {};
-    selectedPaperTradeId = trade.id;
-
-    toast(`Paper trade opened for ${shortSymbol(symbol)}. Target profit after fees ${signedMoney(trade.targetProfit)}, cash left ${money(account.cashAvailable)}.`);
-
-    await loadPaper();
-    await selectPaperTrade(trade.id, trade.symbol);
-  } catch (e) {
-    toast(e.message);
-  }
-}
-
 async function checkOptions(symbol) {
   try {
     const data = await getJson(endpoint("/api/options", { symbol }));
@@ -1046,8 +1028,8 @@ function renderPaperAccount(stats, trades) {
 
   $("paperStats").innerHTML = `
     <div class="paper-account-head">
-      <h3>$5,000 Paper Account</h3>
-      <small>Click any paper trade to show bought time, sold time, entry, exit, brokerage and profit on the chart. Minimum trade value is ${money(st.minTradeValue || 500)} before brokerage.</small>
+      <h3>$5,000 Auto Paper Account</h3>
+      <small>Fully automatic rule-based paper account. Click any auto trade to show bought time, sold time, entry, exit, brokerage and profit on the chart.</small>
     </div>
 
     <div class="paper-summary account-summary">
@@ -1065,15 +1047,15 @@ function renderPaperAccount(stats, trades) {
       <div class="small-metric"><span>Open trades</span><strong>${st.openTrades || 0} / ${st.maxOpenTrades || 5}</strong></div>
     </div>
 
-    <h4>Open paper trades</h4>
+    <h4>Open auto trades</h4>
     <div class="paper-trades">
       ${
         openRows
           .map(
-            (t) => `<div class="paper-trade clickable-paper-trade ${String(t.id) === String(selectedPaperTradeId) ? "selected-paper-trade" : ""}" data-trade-id="${t.id}" onclick="selectPaperTrade('${t.id}', '${t.symbol}')">
+            (t) => `<div class="paper-trade clickable-paper-trade ${String(t.id) === String(selectedPaperTradeId) ? "selected-paper-trade" : ""}" data-trade-id="${t.id}" data-symbol="${t.symbol}">
               <div class="paper-trade-head">
                 <strong>${shortSymbol(t.symbol)} OPEN</strong>
-                <small>${t.setup || "paper trade"}</small>
+                <small>${t.setup || "auto paper trade"}</small>
               </div>
 
               <div class="trade-profit ${pnlClass(t.targetProfit)}">
@@ -1095,19 +1077,19 @@ function renderPaperAccount(stats, trades) {
           )
           .join("") ||
         `<div class="paper-trade">
-          <strong>No open paper trades</strong>
-          <small>Auto Paper will open trades only after the rule gate passes and trade value is at least $500 before brokerage.</small>
+          <strong>No open auto trades</strong>
+          <small>The $5,000 auto paper account will open trades only after the rule gate passes and trade value is at least $500 before brokerage.</small>
         </div>`
       }
     </div>
 
-    <h4>Closed trades</h4>
+    <h4>Closed auto trades</h4>
     <div class="paper-trades">
       ${
         closedRows
           .slice(0, 12)
           .map(
-            (t) => `<div class="paper-trade clickable-paper-trade ${String(t.id) === String(selectedPaperTradeId) ? "selected-paper-trade" : ""}" data-trade-id="${t.id}" onclick="selectPaperTrade('${t.id}', '${t.symbol}')">
+            (t) => `<div class="paper-trade clickable-paper-trade ${String(t.id) === String(selectedPaperTradeId) ? "selected-paper-trade" : ""}" data-trade-id="${t.id}" data-symbol="${t.symbol}">
               <div class="paper-trade-head">
                 <strong>${shortSymbol(t.symbol)} CLOSED</strong>
                 <small>${t.exitReason || "closed"}</small>
@@ -1125,12 +1107,14 @@ function renderPaperAccount(stats, trades) {
           )
           .join("") ||
         `<div class="paper-trade">
-          <strong>No closed trades yet</strong>
+          <strong>No closed auto trades yet</strong>
           <small>Closed trades will show net P/L after entry and exit brokerage.</small>
         </div>`
       }
     </div>
   `;
+
+  bindPaperTradeClicks();
 }
 
 async function loadPaper() {
@@ -1182,7 +1166,7 @@ async function closePaperTrade(id) {
     const trade = json.trade || {};
     selectedPaperTradeId = trade.id;
 
-    toast(`Paper trade closed. Net profit after fees ${signedMoney(trade.pnl)}. Cash available ${money(account.cashAvailable)}.`);
+    toast(`Auto trade closed. Net profit after fees ${signedMoney(trade.pnl)}. Cash available ${money(account.cashAvailable)}.`);
 
     await loadPaper();
     await selectPaperTrade(trade.id, trade.symbol);
@@ -1441,7 +1425,6 @@ function setupNav() {
   );
 }
 
-window.openPaperTrade = openPaperTrade;
 window.checkOptions = checkOptions;
 window.closePaperTrade = closePaperTrade;
 window.runAutoPaper = runAutoPaper;
