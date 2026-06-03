@@ -26,13 +26,14 @@
         </div>
       </div>
 
-      <div class="build-tag">AU-ASX-REAL-V8</div>
+      <div class="build-tag">AU-ASX-REAL-V10</div>
 
       <nav class="side-nav">
         <button class="nav active" data-mode="dashboard">▥ Dashboard</button>
         <button class="nav" data-mode="chart">▤ Chart</button>
         <button class="nav" data-mode="scan">⌕ Live scanner</button>
-        <button class="nav" data-mode="paper">⚙ Auto paper</button>
+        <button class="nav" data-mode="paper">⚙ Paper account</button>
+        <button class="nav" data-mode="auto">◉ Auto trader</button>
         <button class="nav" data-mode="journal">▤ Trade journal</button>
         <button class="nav" data-mode="performance">▥ Performance</button>
         <button class="nav" data-mode="settings">⚙ Scanner settings</button>
@@ -146,11 +147,11 @@
         <canvas id="chart" width="1500" height="620"></canvas>
       </section>
 
-      <section class="card auto-trader-panel" id="autoTraderPanel">
+      <section class="card auto-trader-panel full-paper-line" id="autoTraderPanel">
         <div class="auto-trader-head">
           <div>
             <h3>AUTO PAPER TRADER</h3>
-            <small>Runs rule-gated paper entries and warns before entry/exit.</small>
+            <small>Separate rule-gated engine. This watches for near entries, opens paper trades, and warns near exits.</small>
           </div>
 
           <div class="auto-trader-actions">
@@ -184,8 +185,27 @@
         <div id="autoWarnings" class="auto-warning-list">
           <div class="paper-trade">
             <strong>Waiting for rule-gated setups</strong>
-            <small>Score 80+ and R:R 1.8+ required.</small>
+            <small>Score 80+ and R:R 1.8+ required before the system opens a paper trade.</small>
           </div>
+        </div>
+      </section>
+
+      <section class="card paper-account-section full-paper-line" id="paperPanel">
+        <div class="card-head">
+          <div>
+            <h3>$5,000 PAPER ACCOUNT</h3>
+            <small>This is the actual paper account. Open trades, cash, capital used, risk and realised P/L show here.</small>
+          </div>
+
+          <button class="mini" id="paperAutoPanelBtn">Run Auto</button>
+        </div>
+
+        <div id="autoPaperOutput" class="auto-paper-box">
+          <p class="muted">Auto paper has not run yet.</p>
+        </div>
+
+        <div id="paperStats" class="paper-grid">
+          Loading paper account...
         </div>
       </section>
 
@@ -222,27 +242,10 @@
 
         <aside class="right-stack sticky-trade-panel">
           <div class="card detail-card" id="detail">
-            <h3>TRADE DECISION STREAM</h3>
+            <h3>SETUP DECISION</h3>
             <p class="muted">
-              Select a signal to inspect entry, stop, target, score breakdown and rule gate.
+              Select a signal to inspect entry, stop, target, score breakdown and rule gate. This does not hold the paper account.
             </p>
-          </div>
-
-          <div class="card paper-card" id="paperPanel">
-            <div class="card-head">
-              <div>
-                <h3>Paper Account</h3>
-                <small>Open trades, closed trades and rule-gated entries.</small>
-              </div>
-
-              <button class="mini" id="paperAutoPanelBtn">Run Auto</button>
-            </div>
-
-            <div id="autoPaperOutput" class="auto-paper-box">
-              <p class="muted">Auto paper has not run yet.</p>
-            </div>
-
-            <div id="paperStats" class="paper-grid">Loading...</div>
           </div>
         </aside>
       </section>
@@ -265,7 +268,7 @@
         <div class="settings-head">
           <div>
             <h3>Scanner Settings</h3>
-            <small>Set and forget. Kept lower so the chart and scanner stay up top.</small>
+            <small>Set and forget. Kept lower so the chart, paper account and scanner stay up top.</small>
           </div>
 
           <button id="dayBtn" class="secondary">Day scan</button>
