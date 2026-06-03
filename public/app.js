@@ -5,53 +5,77 @@ let currentRange = "1y";
 let currentInterval = "1d";
 let paperTradesCache = [];
 
+let autoTraderOn = true;
+let autoTraderInterval = null;
+let autoTraderCountdown = 60;
+const AUTO_SCAN_SECONDS = 60;
+
 const $ = (id) => document.getElementById(id);
 
-const money = (v) =>
-  Number.isFinite(Number(v))
-    ? "$" + Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 })
-    : "-";
+function isGoodNumber(v) {
+  if (v === null || v === undefined || v === "") return false;
+  const n = Number(v);
+  return Number.isFinite(n);
+}
 
-const num = (v) =>
-  Number.isFinite(Number(v)) ? Number(v).toFixed(2) : "-";
+const money = (v) => {
+  if (!isGoodNumber(v)) return "-";
+  const n = Number(v);
+  if (n <= 0) return "-";
+  return "$" + n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+};
+
+const num = (v) => {
+  if (!isGoodNumber(v)) return "-";
+  return Number(v).toFixed(2);
+};
 
 function endpoint(path, params = {}) {
   const url = new URL(path, window.location.origin);
+
   for (const [key, value] of Object.entries(params)) {
     if (value !== undefined && value !== null && String(value).trim() !== "") {
       url.searchParams.set(key, value);
     }
   }
+
   return url.toString();
 }
 
 async function getJson(url) {
   const response = await fetch(url, { cache: "no-store" });
   const json = await response.json();
+
   if (!response.ok || json.ok === false) {
     throw new Error(json.error || "Request failed");
   }
+
   return json;
 }
 
 function toast(message) {
   const t = $("toast");
   if (!t) return;
+
   t.textContent = message;
   t.classList.remove("hidden");
+
   setTimeout(() => t.classList.add("hidden"), 4200);
 }
 
 function speak(text) {
   if (!voiceEnabled || !window.speechSynthesis) return;
+
   const u = new SpeechSynthesisUtterance(text);
   u.rate = 0.95;
+
   window.speechSynthesis.cancel();
   window.speechSynthesis.speak(u);
 }
 
 function scoreClass(score) {
   score = Number(score || 0);
+
   if (score >= 78) return "good";
   if (score >= 60) return "mid";
   return "bad";
@@ -59,8 +83,10 @@ function scoreClass(score) {
 
 function decisionClass(decision) {
   const d = String(decision || "");
+
   if (d.includes("AUTO") || d.includes("READY") || d.includes("ENTER")) return "enter";
   if (d.includes("BLOCK") || d.includes("AVOID")) return "block";
+
   return "";
 }
 
@@ -74,7 +100,21 @@ function trendWord(s) {
 
   if (c5 > 1 && c20 > 2) return "BULLISH";
   if (c5 < -1 && c20 < -2) return "BEARISH";
+
   return "NEUTRAL";
+}
+
+function isValidSignal(s) {
+  return (
+    s &&
+    Number(s.price) > 0 &&
+    Number(s.buyZoneHigh) > 0 &&
+    Number(s.buyZoneLow) > 0 &&
+    Number(s.stopLoss) > 0 &&
+    Number(s.target1) > 0 &&
+    Number(s.riskReward) >= 0 &&
+    Number(s.riskReward) <= 20
+  );
 }
 
 function qualityRank(s) {
@@ -110,6 +150,7 @@ function renderHeatmap(signals) {
 
   for (const s of signals || []) {
     const sector = s.sector || signalSector(s.symbol);
+
     if (!grouped.has(sector)) grouped.set(sector, []);
     grouped.get(sector).push(Number(s.score || 0));
   }
@@ -161,13 +202,20 @@ function renderSnapshot(signals) {
 }
 
 function renderSignals(data) {
-  lastSignals = (data.signals || []).slice().sort((a, b) => qualityRank(b) - qualityRank(a));
+  const rawSignals = data.signals || [];
+  const badSignals = rawSignals.filter((s) => !isValidSignal(s));
+
+  lastSignals = rawSignals
+    .filter(isValidSignal)
+    .slice()
+    .sort((a, b) => qualityRank(b) - qualityRank(a));
 
   const aGrades = lastSignals.filter((s) => Number(s.score || 0) >= 78).length;
+  const autoReady = lastSignals.filter((s) => s.paperRules && s.paperRules.allowed).length;
 
   if ($("marketRegime")) $("marketRegime").textContent = String(data.marketRegime || data.market || "ASX").toUpperCase();
   if ($("trendStat")) $("trendStat").textContent = lastSignals.length && lastSignals[0] ? trendWord(lastSignals[0]) : "SCANNING";
-  if ($("countStat")) $("countStat").textContent = String(data.count ?? lastSignals.length);
+  if ($("countStat")) $("countStat").textContent = String(lastSignals.length);
   if ($("aGradeStat")) $("aGradeStat").textContent = String(aGrades);
   if ($("confidenceStat")) $("confidenceStat").textContent = aGrades >= 3 ? "HIGH" : aGrades >= 1 ? "MEDIUM" : "LOW";
   if ($("updatedStat")) $("updatedStat").textContent = data.updatedAt ? new Date(data.updatedAt).toLocaleTimeString() : "Updated";
@@ -175,7 +223,7 @@ function renderSignals(data) {
 
   if ($("meta")) {
     $("meta").textContent =
-      `${data.mode || "scan"} | ${lastSignals.length} returned | Auto-paper candidates: ${lastSignals.filter((s) => s.paperRules && s.paperRules.allowed).length}`;
+      `${data.mode || "scan"} | ${lastSignals.length} valid returned | Auto-paper candidates: ${autoReady} | Bad rows blocked: ${badSignals.length}`;
   }
 
   const tbody = $("signals");
@@ -201,7 +249,7 @@ function renderSignals(data) {
           </tr>`;
         })
         .join("") ||
-      `<tr><td colspan="9">No signals returned. If this is during a Yahoo outage, the backend will show the real error instead of fake data.</td></tr>`;
+      `<tr><td colspan="9">No valid signals returned. Bad or zero-price data is blocked instead of being shown.</td></tr>`;
 
     document.querySelectorAll("#signals tr[data-symbol]").forEach((row) =>
       row.addEventListener("click", () => selectSignal(row.dataset.symbol))
@@ -350,21 +398,23 @@ function drawChart(s, incomingBars, sourceLabel) {
   ctx.fillStyle = "#03070d";
   ctx.fillRect(0, 0, W, H);
 
-  const bars = (incomingBars || s.bars || []).slice(-140);
+  const bars = (incomingBars || s.bars || [])
+    .filter((b) => Number(b.open) > 0 && Number(b.high) > 0 && Number(b.low) > 0 && Number(b.close) > 0)
+    .slice(-140);
 
   if (!bars.length) {
     ctx.fillStyle = "#8fa4bc";
     ctx.font = "16px sans-serif";
-    ctx.fillText("No bars available", 30, 40);
+    ctx.fillText("No valid bars available", 30, 40);
     return;
   }
 
   const tradeLevels = getTradesForSymbol(s.symbol).flatMap((t) =>
-    [Number(t.entry), Number(t.exit), Number(t.stop), Number(t.target)].filter(Number.isFinite)
+    [Number(t.entry), Number(t.exit), Number(t.stop), Number(t.target)].filter((x) => Number.isFinite(x) && x > 0)
   );
 
-  const highs = bars.map((b) => Number(b.high)).filter(Number.isFinite);
-  const lows = bars.map((b) => Number(b.low)).filter(Number.isFinite);
+  const highs = bars.map((b) => Number(b.high)).filter((x) => Number.isFinite(x) && x > 0);
+  const lows = bars.map((b) => Number(b.low)).filter((x) => Number.isFinite(x) && x > 0);
 
   const max = Math.max(...highs, Number(s.target1 || 0), ...tradeLevels);
   const min = Math.min(...lows, Number(s.stopLoss || Infinity), ...tradeLevels);
@@ -418,7 +468,7 @@ function drawChart(s, incomingBars, sourceLabel) {
   });
 
   function line(val, color, label) {
-    if (!Number.isFinite(Number(val))) return;
+    if (!isGoodNumber(val) || Number(val) <= 0) return;
 
     const yy = y(Number(val));
 
@@ -445,11 +495,13 @@ function drawChart(s, incomingBars, sourceLabel) {
   line(s.target1, "#34f59b", "Target");
 
   const trades = getTradesForSymbol(s.symbol);
+
   trades.forEach((t) => {
     line(t.entry, "#42e8ff", "Paper entry");
     line(t.stop, "#ff5d5d", "Paper stop");
     line(t.target, "#34f59b", "Paper target");
-    if (Number.isFinite(Number(t.exit))) {
+
+    if (isGoodNumber(t.exit) && Number(t.exit) > 0) {
       line(t.exit, "#ffc857", "Paper exit");
     }
   });
@@ -486,6 +538,8 @@ async function runScan(mode = "scan") {
 
     selectedSignal = null;
     renderSignals(data);
+    renderAutoWarnings();
+
     toast("ASX scan complete");
   } catch (e) {
     toast(e.message);
@@ -537,12 +591,20 @@ async function runAutoPaper() {
       </div>`;
     }
 
-    toast(`Auto paper complete. Opened ${json.openedCount || 0}.`);
+    if (Number(json.openedCount || 0) > 0) {
+      const first = json.opened[0];
+      const msg = `${shortSymbol(first.symbol)} auto paper trade opened. Entry ${money(first.entry)}, stop ${money(first.stop)}, target ${money(first.target)}.`;
+      toast(msg);
+      speak(msg);
+    } else {
+      toast("Auto paper complete. No trades opened.");
+    }
 
     await loadPaper();
     await runScan("scan");
   } catch (e) {
     toast(e.message);
+
     if ($("autoPaperOutput")) {
       $("autoPaperOutput").innerHTML = `<p class="muted">${e.message}</p>`;
     }
@@ -578,7 +640,11 @@ async function openPaperTrade(symbol) {
     const json = await response.json();
 
     if (!response.ok || json.ok === false) {
-      throw new Error(json.error || "Paper entry failed");
+      const reason = json.checks
+        ? json.checks.map((c) => `${c.name}: ${c.pass ? "PASS" : "BLOCK"}`).join(", ")
+        : json.error || "Paper entry failed";
+
+      throw new Error(reason);
     }
 
     toast(`Paper trade opened for ${shortSymbol(symbol)}`);
@@ -648,6 +714,8 @@ async function loadPaper() {
     if (selectedSignal) {
       drawChart(selectedSignal, selectedSignal.bars || [], selectedSignal.source || "public data");
     }
+
+    renderAutoWarnings();
   } catch (e) {
     if ($("paperStats")) $("paperStats").innerHTML = `<p class="muted">${e.message}</p>`;
   }
@@ -688,7 +756,10 @@ async function closePaperTrade(id) {
 async function loadHealth() {
   try {
     const h = await getJson("/api/health");
-    if ($("systemHealth")) $("systemHealth").textContent = JSON.stringify(h, null, 2);
+
+    if ($("systemHealth")) {
+      $("systemHealth").textContent = JSON.stringify(h, null, 2);
+    }
   } catch (e) {
     if ($("systemHealth")) $("systemHealth").textContent = e.message;
   }
@@ -707,11 +778,178 @@ async function runBacktest() {
       })
     );
 
-    if ($("backtestOutput")) $("backtestOutput").textContent = JSON.stringify(data.stats || data, null, 2);
+    if ($("backtestOutput")) {
+      $("backtestOutput").textContent = JSON.stringify(data.stats || data, null, 2);
+    }
+
     toast("Backtest complete");
   } catch (e) {
     toast(e.message);
   }
+}
+
+function updateAutoTraderUi() {
+  if ($("autoTraderStatus")) {
+    $("autoTraderStatus").textContent = autoTraderOn ? "ON" : "OFF";
+  }
+
+  if ($("autoToggleBtn")) {
+    $("autoToggleBtn").textContent = autoTraderOn ? "Auto Trader: ON" : "Auto Trader: OFF";
+  }
+
+  if ($("autoNextScan")) {
+    $("autoNextScan").textContent = autoTraderOn ? `${autoTraderCountdown}s` : "Paused";
+  }
+
+  if ($("autoPaperState")) {
+    $("autoPaperState").textContent = autoTraderOn ? "AUTO ON" : "PAUSED";
+  }
+}
+
+function warnBeforeEntries() {
+  const near = lastSignals
+    .filter((s) => {
+      const score = Number(s.score || 0);
+      const rr = Number(s.riskReward || 0);
+      const distance = Number(s.distanceToBuyZonePct || 999);
+
+      return score >= 75 && rr >= 1.5 && distance <= 2.5 && Number(s.price) > 0;
+    })
+    .slice(0, 5);
+
+  if ($("entryWarnings")) {
+    $("entryWarnings").textContent = String(near.length);
+  }
+
+  return near.map((s) => ({
+    type: "ENTRY WARNING",
+    symbol: s.symbol,
+    text: `${shortSymbol(s.symbol)} is getting close to auto entry. Score ${s.score}, R:R ${num(s.riskReward)}, distance ${num(s.distanceToBuyZonePct)}%.`
+  }));
+}
+
+function warnBeforeExits() {
+  const warnings = [];
+
+  for (const trade of paperTradesCache.filter((t) => t.status === "open")) {
+    const signal = lastSignals.find((s) => shortSymbol(s.symbol) === shortSymbol(trade.symbol));
+    if (!signal) continue;
+
+    const price = Number(signal.price);
+    const stop = Number(trade.stop);
+    const target = Number(trade.target);
+
+    if (!Number.isFinite(price) || price <= 0) continue;
+
+    if (Number.isFinite(target) && target > 0) {
+      const distanceToTargetPct = ((target - price) / price) * 100;
+
+      if (distanceToTargetPct >= 0 && distanceToTargetPct <= 1.0) {
+        warnings.push({
+          type: "TARGET WARNING",
+          symbol: trade.symbol,
+          text: `${shortSymbol(trade.symbol)} is close to target. Price ${money(price)}, target ${money(target)}.`
+        });
+      }
+    }
+
+    if (Number.isFinite(stop) && stop > 0) {
+      const distanceToStopPct = ((price - stop) / price) * 100;
+
+      if (distanceToStopPct >= 0 && distanceToStopPct <= 1.0) {
+        warnings.push({
+          type: "STOP WARNING",
+          symbol: trade.symbol,
+          text: `${shortSymbol(trade.symbol)} is close to stop. Price ${money(price)}, stop ${money(stop)}.`
+        });
+      }
+    }
+  }
+
+  if ($("exitWarnings")) {
+    $("exitWarnings").textContent = String(warnings.length);
+  }
+
+  return warnings;
+}
+
+let lastWarningText = "";
+
+function renderAutoWarnings() {
+  const entry = warnBeforeEntries();
+  const exit = warnBeforeExits();
+  const all = [...entry, ...exit];
+
+  if (!$("autoWarnings")) return;
+
+  $("autoWarnings").innerHTML = all.length
+    ? all
+        .map(
+          (w) => `
+      <div class="paper-trade warning-card">
+        <div class="paper-trade-head">
+          <strong>${w.type}</strong>
+          <small>${shortSymbol(w.symbol)}</small>
+        </div>
+        <small>${w.text}</small>
+      </div>
+    `
+        )
+        .join("")
+    : `<div class="paper-trade"><strong>No near-entry or near-exit warnings</strong><small>Auto trader is monitoring.</small></div>`;
+
+  if (all.length) {
+    const first = all[0].text;
+
+    if (first !== lastWarningText) {
+      lastWarningText = first;
+      toast(first);
+      speak(first);
+    }
+  }
+}
+
+async function autoTraderTick(forceRun = false) {
+  if (!autoTraderOn && !forceRun) return;
+
+  try {
+    await runScan("scan");
+    await loadPaper();
+    renderAutoWarnings();
+
+    const ready = lastSignals.filter((s) => s.paperRules && s.paperRules.allowed);
+
+    if (ready.length > 0 || forceRun) {
+      await runAutoPaper();
+      await loadPaper();
+      renderAutoWarnings();
+    }
+  } catch (e) {
+    toast("Auto trader error: " + e.message);
+  }
+}
+
+function startAutoTrader() {
+  if (autoTraderInterval) clearInterval(autoTraderInterval);
+
+  autoTraderCountdown = AUTO_SCAN_SECONDS;
+  updateAutoTraderUi();
+
+  autoTraderInterval = setInterval(async () => {
+    if (!autoTraderOn) {
+      updateAutoTraderUi();
+      return;
+    }
+
+    autoTraderCountdown -= 1;
+
+    if (autoTraderCountdown <= 0) {
+      autoTraderCountdown = AUTO_SCAN_SECONDS;
+      await autoTraderTick(false);
+    }
+
+    updateAutoTraderUi();
+  }, 1000);
 }
 
 function setupTimeframeButtons() {
@@ -742,7 +980,7 @@ function setupNav() {
         dashboard: "chartPanel",
         chart: "chartPanel",
         scan: "scanPanel",
-        paper: "paperPanel",
+        paper: "autoTraderPanel",
         journal: "paperPanel",
         performance: "paperPanel",
         settings: "settingsPanel",
@@ -779,6 +1017,18 @@ if ($("autoPaperBtn")) $("autoPaperBtn").addEventListener("click", runAutoPaper)
 if ($("topAutoPaperBtn")) $("topAutoPaperBtn").addEventListener("click", runAutoPaper);
 if ($("paperAutoPanelBtn")) $("paperAutoPanelBtn").addEventListener("click", runAutoPaper);
 
+if ($("autoToggleBtn")) {
+  $("autoToggleBtn").addEventListener("click", () => {
+    autoTraderOn = !autoTraderOn;
+    updateAutoTraderUi();
+    toast(autoTraderOn ? "Auto trader turned on" : "Auto trader paused");
+  });
+}
+
+if ($("autoRunNowBtn")) {
+  $("autoRunNowBtn").addEventListener("click", () => autoTraderTick(true));
+}
+
 if ($("clearSelect")) {
   $("clearSelect").addEventListener("click", () => {
     selectedSignal = null;
@@ -801,3 +1051,4 @@ setupNav();
 loadHealth();
 loadPaper();
 runScan("scan");
+startAutoTrader();
