@@ -4,7 +4,7 @@ const fs = require("fs");
 
 const app = express();
 const PORT = process.env.PORT || 10000;
-const VERSION = "tradingmint-asx-real-v11-brokerage-min-500";
+const VERSION = "tradingmint-asx-real-v12-backtest-brokerage-min-500";
 
 const publicPath = path.join(__dirname, "public");
 const dataPath = path.join(__dirname, "data");
@@ -1101,6 +1101,7 @@ function enrichTradeFinancials(trade) {
     trade.grossPnl = round(grossPnl, 2);
     trade.totalBrokerFees = round(totalBrokerFees, 2);
     trade.pnl = round(netPnl, 2);
+    trade.netPnl = round(netPnl, 2);
     trade.pnlPct = tradeValue > 0 ? round((netPnl / tradeValue) * 100, 2) : 0;
   } else {
     trade.totalBrokerFees = round(entryBrokerFee + estimatedExitBrokerFee, 2);
@@ -1376,14 +1377,21 @@ function equityStats(equityCurve, trades) {
     if (dd < maxDrawdownPct) maxDrawdownPct = dd;
   }
 
-  const wins = trades.filter((t) => t.pnl > 0);
-  const losses = trades.filter((t) => t.pnl < 0);
-  const grossWin = wins.reduce((s, t) => s + t.pnl, 0);
-  const grossLoss = Math.abs(losses.reduce((s, t) => s + t.pnl, 0));
+  const wins = trades.filter((t) => Number(t.netPnl) > 0);
+  const losses = trades.filter((t) => Number(t.netPnl) < 0);
+
+  const grossWin = wins.reduce((s, t) => s + Number(t.netPnl || 0), 0);
+  const grossLoss = Math.abs(losses.reduce((s, t) => s + Number(t.netPnl || 0), 0));
+  const totalFees = trades.reduce((s, t) => s + Number(t.totalBrokerFees || 0), 0);
+  const grossPnl = trades.reduce((s, t) => s + Number(t.grossPnl || 0), 0);
+  const netPnl = trades.reduce((s, t) => s + Number(t.netPnl || 0), 0);
 
   return {
     startingEquity: round(starting),
     endingEquity: round(ending),
+    grossPnl: round(grossPnl),
+    totalBrokerFees: round(totalFees),
+    netProfitAfterFees: round(netPnl),
     netProfit: round(ending - starting),
     netReturnPct: starting ? round(((ending - starting) / starting) * 100, 2) : 0,
     totalTrades: trades.length,
@@ -1391,20 +1399,37 @@ function equityStats(equityCurve, trades) {
     losses: losses.length,
     winRate: trades.length ? round((wins.length / trades.length) * 100, 2) : 0,
     profitFactor: grossLoss > 0 ? round(grossWin / grossLoss, 2) : wins.length ? 99 : 0,
-    maxDrawdownPct: round(maxDrawdownPct, 2)
+    maxDrawdownPct: round(maxDrawdownPct, 2),
+    brokerFeePerTrade: PAPER_ACCOUNT.brokerFeePerTrade,
+    minTradeValue: PAPER_RULES.minTradeValue,
+    maxTradeValue: PAPER_RULES.maxTradeValue,
+    riskDollars: PAPER_RULES.riskDollars,
+    rulesUsed: {
+      minimumTradeValue: PAPER_RULES.minTradeValue,
+      maximumTradeValue: PAPER_RULES.maxTradeValue,
+      entryBrokerage: PAPER_ACCOUNT.brokerFeePerTrade,
+      exitBrokerage: PAPER_ACCOUNT.brokerFeePerTrade,
+      maxOpenTrades: PAPER_RULES.maxOpenTrades,
+      minScore: PAPER_RULES.minScore,
+      minRiskReward: PAPER_RULES.minRiskReward
+    }
   };
 }
 
 function getBacktestParams(req) {
   return {
-    accountSize: Math.max(100, Number(req.query.account || 5000)),
-    riskDollars: Math.max(1, Number(req.query.risk || 50)),
-    maxTradePct: Math.max(1, Math.min(100, Number(req.query.maxTradePct || 20))),
-    maxOpenTrades: Math.max(1, Math.min(20, Number(req.query.maxOpenTrades || 5))),
+    accountSize: Math.max(100, Number(req.query.account || PAPER_ACCOUNT.startingBalance || 5000)),
+    riskDollars: Math.max(1, Number(req.query.risk || PAPER_RULES.riskDollars || 50)),
+    maxTradePct: Math.max(1, Math.min(100, Number(req.query.maxTradePct || 25))),
+    maxOpenTrades: Math.max(1, Math.min(20, Number(req.query.maxOpenTrades || PAPER_RULES.maxOpenTrades || 5))),
     maxEntriesPerDay: Math.max(1, Math.min(20, Number(req.query.maxEntriesPerDay || 3))),
     minHoldDays: Math.max(1, Number(req.query.minHoldDays || 1)),
     maxHoldDays: Math.max(2, Number(req.query.maxHoldDays || 12)),
-    years: Math.max(1, Math.min(10, Number(req.query.years || 10)))
+    years: Math.max(1, Math.min(10, Number(req.query.years || 10))),
+    minTradeValue: Math.max(1, Number(req.query.minTradeValue || PAPER_RULES.minTradeValue || 500)),
+    maxTradeValue: Math.max(1, Number(req.query.maxTradeValue || PAPER_RULES.maxTradeValue || 1000)),
+    entryBrokerFee: Math.max(0, Number(req.query.entryBrokerFee || PAPER_ACCOUNT.brokerFeePerTrade || 9.5)),
+    exitBrokerFee: Math.max(0, Number(req.query.exitBrokerFee || PAPER_ACCOUNT.brokerFeePerTrade || 9.5))
   };
 }
 
@@ -1414,21 +1439,67 @@ function swingEntryTier(signal) {
   const distance = Number(signal.distanceToBuyZonePct || 0);
   const near = Number.isFinite(distance) && distance <= 1.5 && distance >= -3;
 
-  if (score >= 85 && rr >= 1.8 && near) return "Tier 1";
-  if (score >= 80 && rr >= 1.8 && near) return "Tier 2";
+  if (score >= 85 && rr >= PAPER_RULES.minRiskReward && near) return "Tier 1";
+  if (score >= PAPER_RULES.minScore && rr >= PAPER_RULES.minRiskReward && near) return "Tier 2";
   if (score >= 75 && rr >= 2.2 && near) return "Tier 3";
 
   return "";
+}
+
+function calculateBacktestPositionSize({ entry, stop, cash, currentEquity, params }) {
+  const riskPerShare = Number(entry) - Number(stop);
+
+  if (!Number.isFinite(entry) || entry <= 0) return null;
+  if (!Number.isFinite(stop) || stop <= 0 || stop >= entry) return null;
+  if (!Number.isFinite(riskPerShare) || riskPerShare <= 0) return null;
+
+  const cashAfterEntryBrokerage = cash - params.entryBrokerFee;
+  if (cashAfterEntryBrokerage <= 0) return null;
+
+  const maxByRule = params.maxTradeValue;
+  const maxByEquityPct = currentEquity * (params.maxTradePct / 100);
+  const maxByCash = cashAfterEntryBrokerage;
+
+  const maxAllowedTradeValue = Math.min(maxByRule, maxByEquityPct, maxByCash);
+  const minRequiredTradeValue = params.minTradeValue;
+
+  if (maxAllowedTradeValue < minRequiredTradeValue) return null;
+
+  const minSharesByValue = Math.ceil(minRequiredTradeValue / entry);
+  const maxSharesByValue = Math.floor(maxAllowedTradeValue / entry);
+  const maxSharesByRisk = Math.floor(params.riskDollars / riskPerShare);
+
+  const shares = Math.max(0, Math.min(maxSharesByValue, maxSharesByRisk));
+
+  if (shares < minSharesByValue) return null;
+
+  const tradeValue = shares * entry;
+
+  if (tradeValue < params.minTradeValue) return null;
+  if (tradeValue > params.maxTradeValue) return null;
+  if (tradeValue + params.entryBrokerFee > cash) return null;
+
+  return {
+    shares,
+    tradeValue,
+    entryBrokerFee: params.entryBrokerFee,
+    estimatedExitBrokerFee: params.exitBrokerFee,
+    cashCommitted: tradeValue + params.entryBrokerFee,
+    grossRisk: riskPerShare * shares,
+    riskAfterFees: riskPerShare * shares + params.entryBrokerFee + params.exitBrokerFee
+  };
 }
 
 async function backtestSymbols(symbolList, params) {
   const startedAt = Date.now();
   const loaded = [];
   const errors = [];
+  const skipped = [];
 
   const results = await mapLimit(symbolList, 4, async (symbol) => {
     try {
       const result = await getBars(symbol, "10y", "1d");
+
       return {
         ok: true,
         symbol: normalizeAsxSymbol(symbol),
@@ -1490,10 +1561,13 @@ async function backtestSymbols(symbolList, params) {
       }
 
       if (exitPrice !== null) {
-        const proceeds = exitPrice * pos.shares;
-        const pnl = proceeds - pos.cost;
+        const grossProceeds = exitPrice * pos.shares;
+        const netProceeds = grossProceeds - pos.exitBrokerFee;
+        const grossPnl = grossProceeds - pos.tradeValue;
+        const totalBrokerFees = pos.entryBrokerFee + pos.exitBrokerFee;
+        const netPnl = grossPnl - totalBrokerFees;
 
-        cash += proceeds;
+        cash += netProceeds;
 
         trades.push({
           symbol: pos.symbol,
@@ -1502,14 +1576,22 @@ async function backtestSymbols(symbolList, params) {
           entry: round(pos.entry),
           exit: round(exitPrice),
           shares: pos.shares,
-          cost: round(pos.cost),
-          proceeds: round(proceeds),
-          pnl: round(pnl),
-          pnlPct: round((pnl / pos.cost) * 100, 2),
+          tradeValue: round(pos.tradeValue),
+          cashCommitted: round(pos.cashCommitted),
+          grossProceeds: round(grossProceeds),
+          netProceeds: round(netProceeds),
+          entryBrokerFee: round(pos.entryBrokerFee),
+          exitBrokerFee: round(pos.exitBrokerFee),
+          totalBrokerFees: round(totalBrokerFees),
+          grossPnl: round(grossPnl),
+          netPnl: round(netPnl),
+          pnl: round(netPnl),
+          pnlPct: pos.tradeValue > 0 ? round((netPnl / pos.tradeValue) * 100, 2) : 0,
           holdDays,
           entryScore: pos.entryScore,
           riskReward: pos.riskReward,
-          exitReason
+          exitReason,
+          ruleNotes: "$500 minimum trade value and brokerage included."
         });
 
         open.splice(i, 1);
@@ -1528,37 +1610,59 @@ async function backtestSymbols(symbolList, params) {
       if (!swingEntryTier(signal) || !signal.paperRules.allowed) continue;
 
       const nextBar = item.bars[row.index + 1];
-      const entry = nextBar.open;
+      const entry = Number(nextBar.open);
       const stop = Number(signal.stopLoss);
       const target = Number(signal.target1);
       const rr = calcRiskReward(entry, stop, target);
 
-      if (!Number.isFinite(entry) || !Number.isFinite(stop) || !Number.isFinite(target) || rr < PAPER_RULES.minRiskReward) continue;
+      if (!Number.isFinite(entry) || !Number.isFinite(stop) || !Number.isFinite(target) || rr < PAPER_RULES.minRiskReward) {
+        skipped.push({
+          date,
+          symbol: item.symbol,
+          reason: "Invalid entry, stop, target or R:R."
+        });
+        continue;
+      }
 
-      const currentEquity = cash + open.reduce((s, p) => s + p.shares * p.lastPrice, 0);
-      const maxTradeValue = Math.min(cash, currentEquity * (params.maxTradePct / 100));
-      const riskPerShare = entry - stop;
+      const currentEquity =
+        cash +
+        open.reduce((s, p) => {
+          const liveRow = bySymbolDate.get(p.symbol)?.m.get(date);
+          const mark = liveRow ? liveRow.bar.close : p.lastPrice;
+          return s + p.shares * mark;
+        }, 0);
 
-      if (riskPerShare <= 0) continue;
+      const size = calculateBacktestPositionSize({
+        entry,
+        stop,
+        cash,
+        currentEquity,
+        params
+      });
 
-      const shares = Math.max(
-        0,
-        Math.min(Math.floor(params.riskDollars / riskPerShare), Math.floor(maxTradeValue / entry))
-      );
+      if (!size) {
+        skipped.push({
+          date,
+          symbol: item.symbol,
+          reason: "Skipped by $500 minimum trade value, risk, brokerage or cash rule."
+        });
+        continue;
+      }
 
-      if (shares < 1) continue;
-
-      const cost = shares * entry;
-
-      cash -= cost;
+      cash -= size.cashCommitted;
 
       open.push({
         symbol: item.symbol,
         entryDate: nextBar.date,
         entryIndex: row.index + 1,
         entry,
-        shares,
-        cost,
+        shares: size.shares,
+        tradeValue: size.tradeValue,
+        cashCommitted: size.cashCommitted,
+        entryBrokerFee: size.entryBrokerFee,
+        exitBrokerFee: size.estimatedExitBrokerFee,
+        grossRisk: size.grossRisk,
+        riskAfterFees: size.riskAfterFees,
         stop,
         target,
         lastPrice: entry,
@@ -1590,10 +1694,14 @@ async function backtestSymbols(symbolList, params) {
     const pos = open[i];
     const row = bySymbolDate.get(pos.symbol)?.m.get(lastDate);
     const price = row ? row.bar.close : pos.lastPrice;
-    const proceeds = price * pos.shares;
-    const pnl = proceeds - pos.cost;
 
-    cash += proceeds;
+    const grossProceeds = price * pos.shares;
+    const netProceeds = grossProceeds - pos.exitBrokerFee;
+    const grossPnl = grossProceeds - pos.tradeValue;
+    const totalBrokerFees = pos.entryBrokerFee + pos.exitBrokerFee;
+    const netPnl = grossPnl - totalBrokerFees;
+
+    cash += netProceeds;
 
     trades.push({
       symbol: pos.symbol,
@@ -1602,14 +1710,22 @@ async function backtestSymbols(symbolList, params) {
       entry: round(pos.entry),
       exit: round(price),
       shares: pos.shares,
-      cost: round(pos.cost),
-      proceeds: round(proceeds),
-      pnl: round(pnl),
-      pnlPct: round((pnl / pos.cost) * 100, 2),
+      tradeValue: round(pos.tradeValue),
+      cashCommitted: round(pos.cashCommitted),
+      grossProceeds: round(grossProceeds),
+      netProceeds: round(netProceeds),
+      entryBrokerFee: round(pos.entryBrokerFee),
+      exitBrokerFee: round(pos.exitBrokerFee),
+      totalBrokerFees: round(totalBrokerFees),
+      grossPnl: round(grossPnl),
+      netPnl: round(netPnl),
+      pnl: round(netPnl),
+      pnlPct: pos.tradeValue > 0 ? round((netPnl / pos.tradeValue) * 100, 2) : 0,
       holdDays: row ? row.index - pos.entryIndex : 0,
       entryScore: pos.entryScore,
       riskReward: pos.riskReward,
-      exitReason: "Closed at end of backtest"
+      exitReason: "Closed at end of backtest",
+      ruleNotes: "$500 minimum trade value and brokerage included."
     });
   }
 
@@ -1621,11 +1737,13 @@ async function backtestSymbols(symbolList, params) {
     ok: true,
     version: VERSION,
     market: "ASX",
-    mode: "asx-share-backtest",
+    mode: "asx-share-backtest-with-brokerage-and-minimum-trade-value",
     params,
     requested: symbolList.length,
     loaded: loaded.length,
     errors,
+    skippedCount: skipped.length,
+    skipped: skipped.slice(-80),
     stats: equityStats(equityCurve, trades),
     trades: trades.slice(-250).reverse(),
     equityCurve,
@@ -1634,6 +1752,10 @@ async function backtestSymbols(symbolList, params) {
     notes: [
       "Uses public Yahoo Finance ASX chart data only.",
       "No fake quotes, no fake options, no fake official live data.",
+      "Backtest now follows the paper-trading rules.",
+      "$500 minimum trade value is enforced.",
+      "Entry and exit brokerage are deducted.",
+      "P/L is net after broker fees.",
       "Entries are simulated on the next daily open after a qualifying signal.",
       "Backtesting is historical simulation, not proof of future performance."
     ]
