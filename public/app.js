@@ -27,6 +27,13 @@ const money = (v) => {
   return "$" + n.toLocaleString(undefined, { maximumFractionDigits: 2 });
 };
 
+const signedMoney = (v) => {
+  if (!isGoodNumber(v)) return "-";
+  const n = Number(v);
+  const sign = n > 0 ? "+" : n < 0 ? "-" : "";
+  return sign + "$" + Math.abs(n).toLocaleString(undefined, { maximumFractionDigits: 2 });
+};
+
 const num = (v) => {
   if (!isGoodNumber(v)) return "-";
   return Number(v).toFixed(2);
@@ -338,8 +345,8 @@ function renderRuleChecks(s) {
 function renderDetail(s) {
   if (!s) {
     $("detail").innerHTML =
-      `<h3>TRADE DECISION STREAM</h3>
-      <p class="muted">Select a signal to inspect entry, stop, target, score breakdown and rule gate.</p>`;
+      `<h3>SETUP DECISION</h3>
+      <p class="muted">Select a signal to inspect entry, stop, target, score breakdown and rule gate. This is not the account.</p>`;
     return;
   }
 
@@ -358,7 +365,7 @@ function renderDetail(s) {
 
   const gate = s.paperRules && s.paperRules.allowed ? "AUTO PAPER READY" : "RULES BLOCK";
 
-  $("detail").innerHTML = `<h3>TRADE DECISION STREAM</h3>
+  $("detail").innerHTML = `<h3>SETUP DECISION</h3>
     <div class="detail-title">
       ${shortSymbol(s.symbol)}
       <small>${s.setup || "ASX setup"} | ${gate}</small>
@@ -374,7 +381,7 @@ function renderDetail(s) {
     </div>
 
     <div class="button-row">
-      <button class="secondary" onclick="openPaperTrade('${s.symbol}')">Manual Rule Paper Entry</button>
+      <button class="secondary" onclick="openPaperTrade('${s.symbol}')">Send to Paper Account</button>
       <button class="secondary" onclick="runAutoPaper()">Run Auto Paper</button>
       <button class="secondary" onclick="document.getElementById('chartPanel').scrollIntoView({behavior:'smooth'})">View Chart</button>
       <button class="secondary" onclick="checkOptions('${s.symbol}')">Check Options Reality</button>
@@ -611,6 +618,8 @@ async function runAutoPaper() {
       throw new Error(json.error || "Auto paper failed");
     }
 
+    const account = json.accountAfter || {};
+
     const openedHtml = (json.opened || [])
       .map(
         (t) => `<div class="paper-trade">
@@ -618,7 +627,9 @@ async function runAutoPaper() {
             <strong>${shortSymbol(t.symbol)} AUTO OPENED</strong>
             <small>${t.setup}</small>
           </div>
-          <small>Entry ${money(t.entry)} | Stop ${money(t.stop)} | Target ${money(t.target)} | R:R ${num(t.riskReward)}</small>
+          <small>
+            Entry ${money(t.entry)} | Shares ${t.shares} | Capital ${money(t.capitalUsed)} | Risk ${money(t.riskAmount)} | Target reward ${money(t.targetProfit)}
+          </small>
         </div>`
       )
       .join("");
@@ -653,8 +664,8 @@ async function runAutoPaper() {
       $("autoPaperOutput").innerHTML = `<div class="snapshot-list">
         <div class="snapshot-item"><strong>Opened this run</strong><span>${json.openedCount || 0}</span></div>
         <div class="snapshot-item"><strong>Blocked this run</strong><span>${json.blockedCount || 0}</span></div>
-        <div class="snapshot-item"><strong>Scanned</strong><span>${json.scanned || 0}</span></div>
-        <div class="snapshot-item"><strong>Rules</strong><span>Score 80+ / R:R 1.8+</span></div>
+        <div class="snapshot-item"><strong>Cash left</strong><span>${money(account.cashAvailable)}</span></div>
+        <div class="snapshot-item"><strong>In trades</strong><span>${money(account.capitalInOpenTrades)}</span></div>
       </div>
 
       <h4>Opened</h4>
@@ -675,7 +686,7 @@ async function runAutoPaper() {
 
     if (Number(json.openedCount || 0) > 0) {
       const first = json.opened[0];
-      const msg = `${shortSymbol(first.symbol)} auto paper trade opened. Entry ${money(first.entry)}, stop ${money(first.stop)}, target ${money(first.target)}.`;
+      const msg = `${shortSymbol(first.symbol)} auto paper trade opened. Capital used ${money(first.capitalUsed)}, cash left ${money(account.cashAvailable)}.`;
       toast(msg);
       speak(msg);
     } else {
@@ -732,7 +743,9 @@ async function openPaperTrade(symbol) {
       throw new Error(reason);
     }
 
-    toast(`Paper trade opened for ${shortSymbol(symbol)}`);
+    const account = json.account || {};
+    toast(`Paper trade opened for ${shortSymbol(symbol)}. Cash left ${money(account.cashAvailable)}.`);
+
     await loadPaper();
 
     if (selectedSignal) await loadChart(selectedSignal.symbol);
@@ -750,51 +763,104 @@ async function checkOptions(symbol) {
   }
 }
 
+function renderPaperAccount(stats, trades) {
+  const st = stats || {};
+  const rows = trades || [];
+  const openRows = rows.filter((t) => t.status === "open");
+  const closedRows = rows.filter((t) => t.status === "closed");
+
+  if (!$("paperStats")) return;
+
+  $("paperStats").innerHTML = `
+    <div class="paper-account-head">
+      <h3>$5,000 Paper Account</h3>
+      <small>Shows cash, capital used, risk, reward and trade history.</small>
+    </div>
+
+    <div class="paper-summary account-summary">
+      <div class="small-metric"><span>Starting balance</span><strong>${money(st.startingBalance || 5000)}</strong></div>
+      <div class="small-metric"><span>Cash available</span><strong>${money(st.cashAvailable)}</strong></div>
+      <div class="small-metric"><span>Capital in trades</span><strong>${money(st.capitalInOpenTrades)}</strong></div>
+      <div class="small-metric"><span>Account equity</span><strong>${money(st.accountEquity)}</strong></div>
+      <div class="small-metric"><span>Open risk</span><strong>${money(st.openRisk)}</strong></div>
+      <div class="small-metric"><span>Target reward</span><strong>${money(st.openTargetReward)}</strong></div>
+      <div class="small-metric"><span>Realised P/L</span><strong>${signedMoney(st.realisedPnl || st.netPnl || 0)}</strong></div>
+      <div class="small-metric"><span>Open trades</span><strong>${st.openTrades || 0} / ${st.maxOpenTrades || 5}</strong></div>
+    </div>
+
+    <h4>Open paper trades</h4>
+    <div class="paper-trades">
+      ${
+        openRows
+          .map(
+            (t) => `<div class="paper-trade">
+              <div class="paper-trade-head">
+                <strong>${shortSymbol(t.symbol)} OPEN</strong>
+                <small>${t.setup || "paper trade"}</small>
+              </div>
+
+              <small>
+                Entry ${money(t.entry)} | Shares ${t.shares} | Capital used ${money(t.capitalUsed || t.cost)}
+              </small>
+              <small>
+                Stop ${money(t.stop)} | Target ${money(t.target)} | Risk ${money(t.riskAmount)} | Target reward ${money(t.targetProfit)}
+              </small>
+              <small>
+                R:R ${num(t.riskReward)} | Account used ${num(t.accountUsedPct)}% | Account risk ${num(t.accountRiskPct)}%
+              </small>
+
+              <div class="paper-close-row">
+                <input id="close-${t.id}" type="number" step="0.01" value="${t.entry}">
+                <button class="mini" onclick="closePaperTrade('${t.id}')">Close</button>
+              </div>
+            </div>`
+          )
+          .join("") ||
+        `<div class="paper-trade">
+          <strong>No open paper trades</strong>
+          <small>Auto Paper will open trades only after the rule gate passes.</small>
+        </div>`
+      }
+    </div>
+
+    <h4>Closed trades</h4>
+    <div class="paper-trades">
+      ${
+        closedRows
+          .slice(0, 12)
+          .map(
+            (t) => `<div class="paper-trade">
+              <div class="paper-trade-head">
+                <strong>${shortSymbol(t.symbol)} CLOSED</strong>
+                <small>${t.exitReason || "closed"}</small>
+              </div>
+              <small>Entry ${money(t.entry)} | Exit ${money(t.exit)} | Shares ${t.shares}</small>
+              <small>P/L ${signedMoney(t.pnl)} (${num(t.pnlPct)}%) | Capital ${money(t.capitalUsed || t.cost)}</small>
+            </div>`
+          )
+          .join("") ||
+        `<div class="paper-trade">
+          <strong>No closed trades yet</strong>
+          <small>Closed trades will show here.</small>
+        </div>`
+      }
+    </div>
+  `;
+}
+
 async function loadPaper() {
   try {
-    const [stats, trades] = await Promise.all([getJson("/api/paper/stats"), getJson("/api/paper/trades")]);
+    const [statsResponse, tradesResponse] = await Promise.all([
+      getJson("/api/paper/stats"),
+      getJson("/api/paper/trades")
+    ]);
 
-    const st = stats.stats || {};
-    const rows = (trades.trades || []).slice(0, 40);
+    const stats = statsResponse.stats || tradesResponse.account || {};
+    const rows = tradesResponse.trades || [];
+
     paperTradesCache = rows;
 
-    const openCount = rows.filter((t) => t.status === "open").length;
-
-    if ($("paperStats")) {
-      $("paperStats").innerHTML = `<div class="paper-summary">
-        <div class="small-metric"><span>Open trades</span><strong>${openCount}</strong></div>
-        <div class="small-metric"><span>Closed trades</span><strong>${st.closedTrades || 0}</strong></div>
-        <div class="small-metric"><span>Win rate</span><strong>${num(st.winRate)}%</strong></div>
-        <div class="small-metric"><span>Net P/L</span><strong>${money(st.netPnl || 0)}</strong></div>
-      </div>
-
-      <div class="paper-trades">
-        ${
-          rows
-            .map(
-              (t) => `<div class="paper-trade">
-                <div class="paper-trade-head">
-                  <strong>${shortSymbol(t.symbol)} ${String(t.status).toUpperCase()}</strong>
-                  <small>${t.setup || "manual"}</small>
-                </div>
-
-                <small>Entry ${money(t.entry)} | Shares ${t.shares} | Stop ${money(t.stop)} | Target ${money(t.target)} | R:R ${num(t.riskReward)}</small>
-
-                ${
-                  t.status === "open"
-                    ? `<div class="paper-close-row">
-                        <input id="close-${t.id}" type="number" step="0.01" value="${t.entry}">
-                        <button class="mini" onclick="closePaperTrade('${t.id}')">Close</button>
-                      </div>`
-                    : `<small>Exit ${money(t.exit)} | P/L ${money(t.pnl)} (${num(t.pnlPct)}%)</small>`
-                }
-              </div>`
-            )
-            .join("") ||
-          `<div class="paper-trade"><strong>No paper trades yet</strong><small>Run Auto Paper or use a rule-gated manual paper entry.</small></div>`
-        }
-      </div>`;
-    }
+    renderPaperAccount(stats, rows);
 
     if (selectedSignal) {
       drawChart(selectedSignal, selectedSignal.bars || [], selectedSignal.source || "public data");
@@ -827,7 +893,9 @@ async function closePaperTrade(id) {
       throw new Error(json.error || "Paper close failed");
     }
 
-    toast("Paper trade closed");
+    const account = json.account || {};
+    toast(`Paper trade closed. Cash available ${money(account.cashAvailable)}.`);
+
     await loadPaper();
 
     if (selectedSignal) {
@@ -1066,7 +1134,7 @@ function setupNav() {
         dashboard: "chartPanel",
         chart: "chartPanel",
         scan: "scanPanel",
-        paper: "autoTraderPanel",
+        paper: "paperPanel",
         journal: "paperPanel",
         performance: "paperPanel",
         settings: "settingsPanel",
