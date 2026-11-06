@@ -26,7 +26,7 @@
         </div>
       </div>
 
-      <div class="build-tag">AU-ASX-REAL-V12</div>
+      <div class="build-tag" id="buildTag">STOCK LEARNER V14</div>
 
       <nav class="side-nav">
         <button class="nav active" data-mode="dashboard">▥ Dashboard</button>
@@ -35,6 +35,7 @@
         <button class="nav" data-mode="paper">⚙ $5,000 auto account</button>
         <button class="nav" data-mode="journal">▤ Trade journal</button>
         <button class="nav" data-mode="performance">▥ Performance</button>
+        <button class="nav" data-mode="learning">▥ Learning results</button>
         <button class="nav" data-mode="settings">⚙ Scanner settings</button>
         <button class="nav" data-mode="sectors">▥ Sector rotation</button>
         <button class="nav" data-mode="health">⚙ System health</button>
@@ -62,6 +63,7 @@
           <button id="topAutoPaperBtn">Run $5,000 Auto</button>
         </div>
       </header>
+      <p id="storageNotice" class="storage-notice" role="status">Checking history storage…</p>
 
       <section class="session-strip card compact-strip">
         <div class="session-main">
@@ -268,6 +270,21 @@
           <option value="staples">Staples</option>
           <option value="industrials">Industrials</option>
         </select>
+      </section>
+
+      <section class="card learning-panel" id="learningPanel">
+        <div class="learning-head">
+          <div><h3>Learning from signals</h3><p>Track what happened after each daily signal, including signals that did not qualify for a paper trade.</p></div>
+          <div class="learning-actions">
+            <button id="evaluateLearningBtn">Update outcomes</button>
+            <a class="backup-link" href="/api/backup" download="stock-learner-backup.json">Download history backup</a>
+          </div>
+        </div>
+        <p id="learningStatus" role="status">Loading learning results…</p>
+        <div id="learningSummary" class="paper-summary"></div>
+        <div class="learning-table-wrap"><table class="learning-table"><thead><tr><th>Setup and score</th><th>Completed signals</th><th>Average return after costs</th><th>Positive outcomes</th></tr></thead><tbody id="learningRows"></tbody></table></div>
+        <p id="learningComparison"></p>
+        <p class="muted">These are simulated returns from the next session’s open to a later close, with brokerage and slippage. They do not follow stop or target exits. Signals overlap, so counts are not independent tests. Trading rules stay unchanged.</p>
       </section>
 
       <section class="dashboard-grid lower panels" id="healthPanel">

@@ -1108,6 +1108,16 @@ pre {
   background: rgba(52, 245, 155, .09);
 }
 /* Final simplified $5,000 auto paper account layout */
+.storage-notice { padding: 12px 16px; border: 1px solid #806c38; background: #282515; color: #e9dbab; border-radius: 8px; line-height: 1.5; }
+.learning-panel { margin: 18px 0; padding: 20px; }
+.learning-head { display: flex; align-items: start; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+.learning-actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.backup-link { color: var(--cyan, #42e8ff); }
+.learning-table-wrap { overflow-x: auto; }
+.learning-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+.learning-table td, .learning-table th { padding: 12px; text-align: left; border-bottom: 1px solid #303b49; }
+.learning-panel p { line-height: 1.6; }
+@media (max-width: 650px) { .learning-panel { padding: 12px; } .learning-table { min-width: 540px; } }
 
 #paperPanel.paper-account-section {
   display: flex !important;

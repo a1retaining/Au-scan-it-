@@ -22,6 +22,7 @@ const ASX_OPEN_HOUR = 10;
 const ASX_CLOSE_HOUR = 16;
 
 const $ = (id) => document.getElementById(id);
+const escapeText = value => String(value ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 
 function isGoodNumber(v) {
   if (v === null || v === undefined || v === "") return false;
@@ -1034,15 +1035,18 @@ function renderPaperAccount(stats, trades) {
   $("paperStats").innerHTML = `
     <div class="paper-account-head">
       <h3>$5,000 Auto Paper Account</h3>
-      <small>Fully automatic rule-based paper account. Click any auto trade to show bought time, sold time, entry, exit, brokerage and profit on the chart.</small>
+      <small>Rule-based paper account using public prices that may be delayed. Click a trade for its history and chart.</small>
     </div>
 
     <div class="paper-summary account-summary">
       <div class="small-metric"><span>Starting balance</span><strong>${money(st.startingBalance || 5000)}</strong></div>
       <div class="small-metric"><span>Cash available</span><strong>${money(st.cashAvailable)}</strong></div>
-      <div class="small-metric"><span>Capital in trades</span><strong>${money(st.capitalInOpenTrades)}</strong></div>
+      <div class="small-metric"><span>Cost of open shares</span><strong>${money(st.capitalInOpenTrades)}</strong></div>
+      <div class="small-metric"><span>Market value of open shares</span><strong>${money(st.marketValueOfOpenTrades)}</strong></div>
       <div class="small-metric"><span>Cash committed</span><strong>${money(st.cashCommittedToOpenTrades)}</strong></div>
-      <div class="small-metric"><span>Account equity</span><strong>${money(st.accountEquity)}</strong></div>
+      <div class="small-metric"><span>${st.valuationComplete ? "Account equity" : "Estimated equity — missing prices"}</span><strong>${money(st.accountEquity)}</strong></div>
+      <div class="small-metric"><span>Open P/L before fees</span><strong class="${pnlClass(st.unrealisedPnl)}">${signedMoney(st.unrealisedPnl)}</strong></div>
+      <div class="small-metric"><span>Open P/L after estimated fees</span><strong class="${pnlClass(st.unrealisedPnlAfterFees)}">${signedMoney(st.unrealisedPnlAfterFees)}</strong></div>
       <div class="small-metric"><span>Open risk after fees</span><strong>${money(st.openRisk)}</strong></div>
       <div class="small-metric"><span>Target profit after fees</span><strong class="${pnlClass(st.openTargetReward)}">${signedMoney(st.openTargetReward)}</strong></div>
       <div class="small-metric"><span>Realised net P/L</span><strong class="${pnlClass(st.realisedPnl || st.netPnl || 0)}">${signedMoney(st.realisedPnl || st.netPnl || 0)}</strong></div>
@@ -1051,6 +1055,8 @@ function renderPaperAccount(stats, trades) {
       <div class="small-metric"><span>Est. open exit fees</span><strong>${money(st.estimatedOpenExitFees)}</strong></div>
       <div class="small-metric"><span>Open trades</span><strong>${st.openTrades || 0} / ${st.maxOpenTrades || 5}</strong></div>
     </div>
+
+    <p class="muted">${st.valuationComplete ? "Valued using the latest available public prices, which may be delayed." : `${Number(st.unpricedOpenTrades) || 0} open trades have no usable market price; their purchase cost is used in this estimate.`}</p>
 
     <h4>Open auto trades</h4>
     <div class="paper-trades">
@@ -1069,6 +1075,7 @@ function renderPaperAccount(stats, trades) {
 
               <small><strong>Bought:</strong> ${formatTradeTime(t.openedAt)}</small>
               <small>Entry ${money(t.entry)} | Shares ${t.shares} | Trade value ${money(t.tradeValue || t.capitalUsed)}</small>
+              <small>Latest price ${money(t.markPrice)} | Price time ${escapeText(t.markAsOf || "unavailable")}</small>
               <small>Entry fee ${money(t.entryBrokerFee)} | Est. exit fee ${money(t.estimatedExitBrokerFee)} | Cash committed ${money(t.cashCommitted)}</small>
               <small>Stop ${money(t.stop)} | Target ${money(t.target)}</small>
               <small>Risk after fees ${money(t.riskAmount)} | R:R ${num(t.riskReward)}</small>
@@ -1124,12 +1131,8 @@ function renderPaperAccount(stats, trades) {
 
 async function loadPaper() {
   try {
-    const [statsResponse, tradesResponse] = await Promise.all([
-      getJson("/api/paper/stats"),
-      getJson("/api/paper/trades")
-    ]);
-
-    const stats = statsResponse.stats || tradesResponse.account || {};
+    const tradesResponse = await getJson("/api/paper/trades");
+    const stats = tradesResponse.account || {};
     const rows = tradesResponse.trades || [];
 
     paperTradesCache = rows;
@@ -1142,7 +1145,7 @@ async function loadPaper() {
 
     renderAutoWarnings();
   } catch (e) {
-    if ($("paperStats")) $("paperStats").innerHTML = `<p class="muted">${e.message}</p>`;
+    if ($("paperStats")) $("paperStats").textContent = "Account unavailable: " + e.message;
   }
 }
 
@@ -1183,6 +1186,12 @@ async function closePaperTrade(id) {
 async function loadHealth() {
   try {
     const h = await getJson("/api/health");
+    if ($("buildTag")) $("buildTag").textContent = h.version || "Stock learner";
+    if ($("storageNotice")) {
+      $("storageNotice").textContent = h.storage?.readable === false ? "History needs attention: " + h.storage.error :
+        h.storage?.configuredDirectory ? "History storage is configured. Keep a downloaded backup and confirm your host retains it across restarts." :
+        "History is stored locally on the server. Download a backup; hosting restarts may erase it until persistent storage is configured.";
+    }
 
     if ($("systemHealth")) {
       $("systemHealth").textContent = JSON.stringify(h, null, 2);
@@ -1206,12 +1215,40 @@ async function runBacktest() {
     );
 
     if ($("backtestOutput")) {
-      $("backtestOutput").textContent = JSON.stringify(data.stats || data, null, 2);
+      $("backtestOutput").textContent = JSON.stringify({stats: data.stats, assumptions: data.notes, slippageBps: data.params?.slippageBps, errors: data.errors}, null, 2);
     }
 
     toast("Backtest complete");
   } catch (e) {
     toast(e.message);
+  }
+}
+
+async function loadLearning(evaluate = false) {
+  const button = $("evaluateLearningBtn");
+  if (evaluate && button) { button.disabled = true; button.textContent = "Checking later prices…"; }
+  try {
+    const response = evaluate ? await fetch("/api/learning/evaluate", {method: "POST"}) : null;
+    const data = response ? await response.json() : await getJson("/api/learning");
+    if (data.ok === false) throw new Error(data.error || "Could not load learning results");
+    if ($("learningStatus")) $("learningStatus").textContent = data.observations ?
+      "Daily signals are being recorded. Outcomes appear after 5, 10 and 20 later completed trading sessions." :
+      "No observations yet. Run a successful ASX scan to start recording daily signals.";
+    if (data.errors?.length && $("learningStatus")) $("learningStatus").textContent += ` Later prices were unavailable for ${data.errors.length} symbols; their outcomes stay pending.`;
+    if ($("learningSummary")) $("learningSummary").innerHTML = [
+      ["Daily signals recorded", data.observations], ["10-session outcomes", data.completed10Session],
+      ["Awaiting 10-session outcome", data.pending10Session]
+    ].map(([label, value]) => `<div class="small-metric"><span>${label}</span><strong>${Number(value) || 0}</strong></div>`).join("");
+    if ($("learningRows")) $("learningRows").innerHTML = data.bySetupAndScore.length ? data.bySetupAndScore.map(row =>
+      `<tr><td>${escapeText(row.group)}</td><td>${Number(row.count)}</td><td>${num(row.meanNetReturnPct)}%</td><td>${num(row.winRatePct)}%</td></tr>`).join("") :
+      '<tr><td colspan="4">No completed 10-session outcomes yet.</td></tr>';
+    if ($("learningComparison")) $("learningComparison").textContent = data.comparison.status === "insufficient_evidence" ?
+      "More evidence is needed before comparing rules: at least 20 completed observation dates and 30 signals above and below score 85 in both an earlier and a later test period." :
+      `Later test period from ${data.comparison.splitDate}: score 85+ averaged ${num(data.comparison.heldOut.score85Plus.meanNetReturnPct)}% across ${data.comparison.heldOut.score85Plus.count} signals; below 85 averaged ${num(data.comparison.heldOut.below85.meanNetReturnPct)}% across ${data.comparison.heldOut.below85.count}. This comparison is descriptive; no rules were changed.`;
+  } catch (error) {
+    if ($("learningStatus")) $("learningStatus").textContent = "Learning results unavailable: " + error.message;
+  } finally {
+    if (evaluate && button) { button.disabled = false; button.textContent = "Update outcomes"; }
   }
 }
 
@@ -1530,6 +1567,7 @@ function setupNav() {
         paper: "paperPanel",
         journal: "paperPanel",
         performance: "paperPanel",
+        learning: "learningPanel",
         settings: "settingsPanel",
         sectors: "sectorsPanel",
         backtest: "healthPanel",
@@ -1545,6 +1583,7 @@ function setupNav() {
 
       if (["paper", "journal", "performance"].includes(mode)) loadPaper();
       if (mode === "health") loadHealth();
+      if (mode === "learning") loadLearning();
     })
   );
 }
@@ -1560,6 +1599,7 @@ if ($("discoverBtn")) $("discoverBtn").addEventListener("click", () => runScan("
 if ($("dayBtn")) $("dayBtn").addEventListener("click", () => runScan("day"));
 if ($("paperBtn")) $("paperBtn").addEventListener("click", loadPaper);
 if ($("runBacktest")) $("runBacktest").addEventListener("click", runBacktest);
+if ($("evaluateLearningBtn")) $("evaluateLearningBtn").addEventListener("click", () => loadLearning(true));
 if ($("autoPaperBtn")) $("autoPaperBtn").addEventListener("click", runAutoPaper);
 if ($("topAutoPaperBtn")) $("topAutoPaperBtn").addEventListener("click", runAutoPaper);
 if ($("paperAutoPanelBtn")) $("paperAutoPanelBtn").addEventListener("click", runAutoPaper);
@@ -1608,6 +1648,7 @@ startKeepAlive();
 startHardRefreshLoop();
 
 loadHealth();
+loadLearning();
 loadPaper();
 runScan("scan");
 startAutoTrader();

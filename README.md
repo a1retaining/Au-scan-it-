@@ -1,4 +1,10 @@
-# TradingMint PRO ASX - v6 US-look, ASX-real
+# Stock learner — ASX scanner, paper account and measured learning
+
+The current Node dashboard includes market-valued paper equity, fee-aware risk sizing, gap-aware historical simulation, protected history writes, daily signal observations and later outcome comparisons. See [storage, learning and deployment](docs/STORAGE-AND-LEARNING.md) before deploying. Preserve the running account's history first.
+
+Run `npm ci`, `npm run check`, `npm test`, then `npm start`. The current build is `stock-learner-v14-reliability-learning`; `/api/health` reports it. Learning begins with new observations, shows pending outcomes honestly, and never changes trading rules automatically.
+
+The following describes the earlier dashboard design.
 
 This is the Australia-only ASX scanner rebuilt to visually match the US TradingMint PRO dashboard style at `us-scan.onrender.com`, while keeping the ASX backend real-data only.
 
