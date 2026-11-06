@@ -1,0 +1,9 @@
+node_modules/
+.local-data/
+coverage/
+*.tmp
+*.lock
+data/*.backup
+data/*.bak
+data/signal-observations.json
+data/signal-observations.json.*

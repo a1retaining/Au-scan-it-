@@ -1,16 +1,29 @@
 const express = require("express");
 const path = require("path");
 const fs = require("fs");
+const { createArrayStore } = require("./lib/array-store.cjs");
 
 const app = express();
 const PORT = process.env.PORT || 10000;
-const VERSION = "tradingmint-asx-real-v13-keepalive-auto-refresh";
+const VERSION = "stock-learner-v14-reliability-learning";
 
 const publicPath = path.join(__dirname, "public");
-const dataPath = path.join(__dirname, "data");
+const dataPath = path.resolve(process.env.STOCK_DATA_DIR || path.join(__dirname, "data"));
 const tradesPath = path.join(dataPath, "paper-trades.json");
+const tradeStore = createArrayStore(tradesPath, rows => rows.every(t =>
+  t && typeof t.id === "string" && typeof t.symbol === "string" &&
+  ["open", "closed"].includes(t.status) && Number.isFinite(t.entry) && t.entry > 0 &&
+  Number.isInteger(t.shares) && t.shares > 0 &&
+  (t.status !== "closed" || (Number.isFinite(t.exit) && t.exit > 0))
+) && new Set(rows.map(t => t.id)).size === rows.length);
+const learning = require("./lib/learning.cjs");
+const observationStore = createArrayStore(path.join(dataPath, "signal-observations.json"), rows =>
+  rows.every(row => row && typeof row.id === "string" && typeof row.symbol === "string" &&
+    typeof row.strategyVersion === "string" && Number.isFinite(row.score) && row.costModel &&
+    row.outcomes && typeof row.outcomes === "object") && new Set(rows.map(row => row.id)).size === rows.length);
 
 app.use(express.json({ limit: "1mb" }));
+app.use("/api", (req, res, next) => { res.set("Cache-Control", "no-store"); next(); });
 
 const ASX_CONFIG = {
   market: "ASX",
@@ -228,7 +241,7 @@ function safeDate(timestamp, interval) {
 
   return String(interval).includes("m") || String(interval).includes("h")
     ? d.toISOString()
-    : d.toISOString().slice(0, 10);
+    : learning.sydneyDate(d);
 }
 
 function cacheTtl(interval, range) {
@@ -698,6 +711,7 @@ function analyzeSymbol(symbol, bars, marketContext = { market: "Unknown" }, sour
     score,
     rankScore: score,
     price: round(price),
+    priceAsOf: last.date,
     changePercent: round(changePercent, 2),
     change5dPct: round(change5dPct, 2),
     change10dPct: round(change10dPct, 2),
@@ -921,6 +935,7 @@ async function scanSymbols(symbolList, risk) {
     try {
       const result = await getBars(symbol, "1y", "1d");
       const signal = analyzeSymbol(symbol, result.bars, marketContext, result.source);
+      signal.marketRegime = marketContext.market;
 
       if (!Number.isFinite(Number(signal.price)) || Number(signal.price) <= 0) {
         throw new Error(symbol + " produced invalid zero price after analysis.");
@@ -948,6 +963,7 @@ async function scanSymbols(symbolList, risk) {
   }
 
   signals.sort((a, b) => Number(b.rankScore || 0) - Number(a.rankScore || 0));
+  const recorded = recordObservations(signals);
 
   return {
     ok: true,
@@ -962,6 +978,7 @@ async function scanSymbols(symbolList, risk) {
     count: signals.length,
     elapsedMs: Date.now() - startedAt,
     updatedAt: new Date().toISOString(),
+    learning: {recorded, strategyVersion: VERSION},
     signals,
     errors
   };
@@ -1022,25 +1039,8 @@ async function dayScanSymbols(symbolList) {
   };
 }
 
-function ensureTradeFile() {
-  if (!fs.existsSync(dataPath)) fs.mkdirSync(dataPath, { recursive: true });
-  if (!fs.existsSync(tradesPath)) fs.writeFileSync(tradesPath, "[]\n");
-}
-
 function readTrades() {
-  ensureTradeFile();
-
-  try {
-    const trades = JSON.parse(fs.readFileSync(tradesPath, "utf8"));
-    return Array.isArray(trades) ? trades : [];
-  } catch (error) {
-    return [];
-  }
-}
-
-function writeTrades(trades) {
-  ensureTradeFile();
-  fs.writeFileSync(tradesPath, JSON.stringify(trades, null, 2) + "\n");
+  return tradeStore.read();
 }
 
 function openTradeCount(trades) {
@@ -1118,7 +1118,7 @@ function calculateSharesForSignal(price, stop) {
   if (!Number.isFinite(stopLoss) || stopLoss <= 0 || stopLoss >= entry) return 0;
 
   const riskPerShare = entry - stopLoss;
-  const sharesByRisk = Math.floor(PAPER_RULES.riskDollars / riskPerShare);
+  const sharesByRisk = Math.floor(Math.max(0, PAPER_RULES.riskDollars - expectedEntryFee() - expectedExitFee()) / riskPerShare);
   const sharesByMaxValue = Math.floor(PAPER_RULES.maxTradeValue / entry);
   const shares = Math.max(0, Math.min(sharesByRisk, sharesByMaxValue));
 
@@ -1185,9 +1185,7 @@ function buildPaperTradeFromSignal(signal, source) {
 
 function validatePaperTradeRequest(body) {
   const score = Number(body.score || 0);
-  const rr =
-    Number(body.riskReward || body.rr || 0) ||
-    calcRiskReward(Number(body.entry), Number(body.stop), Number(body.target));
+  const rr = calcRiskReward(Number(body.entry), Number(body.stop), Number(body.target));
 
   const signalLike = {
     score,
@@ -1208,7 +1206,7 @@ function validatePaperTradeRequest(body) {
   };
 }
 
-function paperAccountStats(trades) {
+function paperAccountStats(trades, marks = {}) {
   const enriched = trades.map((t) => enrichTradeFinancials({ ...t }));
 
   const open = enriched.filter((t) => t.status === "open");
@@ -1224,7 +1222,17 @@ function paperAccountStats(trades) {
   const closedBrokerFees = closed.reduce((sum, t) => sum + Number(t.totalBrokerFees || 0), 0);
 
   const cashAvailable = PAPER_ACCOUNT.startingBalance + realisedPnl - cashCommittedToOpenTrades;
-  const accountEquity = cashAvailable + capitalInOpenTrades;
+  let unpricedOpenTrades = 0;
+  let unrealisedPnl = 0;
+  const marketValueOfOpenTrades = open.reduce((total, trade) => {
+    const mark = marks[trade.symbol];
+    const priced = mark && Number.isFinite(mark.price) && mark.price > 0;
+    if (!priced) unpricedOpenTrades++;
+    const price = priced ? mark.price : trade.entry;
+    unrealisedPnl += (price - trade.entry) * trade.shares;
+    return total + price * trade.shares;
+  }, 0);
+  const accountEquity = cashAvailable + marketValueOfOpenTrades;
 
   const wins = closed.filter((t) => Number(t.pnl) > 0);
   const losses = closed.filter((t) => Number(t.pnl) < 0);
@@ -1260,6 +1268,13 @@ function paperAccountStats(trades) {
     capitalInOpenTrades: round(capitalInOpenTrades, 2),
     cashCommittedToOpenTrades: round(cashCommittedToOpenTrades, 2),
     accountEquity: round(accountEquity, 2),
+    marketValueOfOpenTrades: round(marketValueOfOpenTrades, 2),
+    unrealisedPnl: round(unrealisedPnl, 2),
+    unrealisedPnlAfterFees: round(unrealisedPnl - openEntryBrokerFees - estimatedOpenExitFees, 2),
+    estimatedLiquidationEquity: round(accountEquity - estimatedOpenExitFees, 2),
+    valuationComplete: unpricedOpenTrades === 0,
+    unpricedOpenTrades,
+    marks,
     realisedPnl: round(realisedPnl, 2),
     openRisk: round(openRisk, 2),
     openTargetReward: round(openTargetReward, 2),
@@ -1282,6 +1297,85 @@ function paperAccountStats(trades) {
   };
 }
 
+async function paperSnapshot() {
+  const initial = readTrades();
+  const symbols = uniqueArray(initial.filter(t => t.status === "open").map(t => t.symbol));
+  const marks = {};
+  const warnings = [];
+  await mapLimit(symbols, 4, async symbol => {
+    try {
+      let result;
+      try { result = await getBars(symbol, "5d", "15m"); }
+      catch { result = await getBars(symbol, "1y", "1d"); }
+      const bar = result.bars[result.bars.length - 1];
+      const age = Date.now() - Date.parse(bar.date);
+      if (!Number.isFinite(age) || age > 5 * 86400000 || age < -86400000) throw new Error("Latest market price is stale or invalid");
+      marks[symbol] = {price: Number(bar.close), asOf: bar.date, source: result.source, interval: result.interval};
+    } catch (error) { warnings.push(symbol + ": " + error.message); }
+  });
+  // Re-read after asynchronous pricing so simultaneous closes/openings are kept.
+  const trades = readTrades().map(t => enrichTradeFinancials({...t}));
+  const account = paperAccountStats(trades, marks);
+  const pricedTrades = trades.map(t => ({...t,
+    markPrice: t.status === "open" ? marks[t.symbol]?.price ?? null : null,
+    markAsOf: t.status === "open" ? marks[t.symbol]?.asOf ?? null : null
+  }));
+  return {trades: pricedTrades, account, warnings};
+}
+
+function recordObservations(signals, observedAt = new Date().toISOString()) {
+  if (!signals.length) return 0;
+  return observationStore.update(rows => {
+    const existing = new Set(rows.map(row => row.id));
+    let recorded = 0;
+    for (const signal of signals) {
+      const item = learning.makeObservation(signal, VERSION, observedAt, {
+        budget: 1000, entryFee: expectedEntryFee(), exitFee: expectedExitFee(), slippageBps: 10
+      });
+      if (!item || existing.has(item.id)) continue;
+      item.ruleSnapshot = {...PAPER_RULES};
+      rows.push(item);
+      existing.add(item.id);
+      recorded++;
+    }
+    return recorded;
+  });
+}
+
+function learningReport() {
+  return learning.buildReport(observationStore.read(), VERSION);
+}
+
+let evaluationPromise = null;
+async function evaluateObservations(asOf = new Date().toISOString()) {
+  if (evaluationPromise) return evaluationPromise;
+  evaluationPromise = (async () => {
+    const today = learning.sydneyDate(asOf);
+    const observations = observationStore.read().filter(row => row.strategyVersion === VERSION && !row.outcomes[20] && row.cutoffDate < today);
+    const symbols = uniqueArray(observations.map(row => row.symbol));
+    const settlements = new Map();
+    const errors = [];
+    await mapLimit(symbols, 4, async symbol => {
+      try {
+        const result = await getBars(symbol, "10y", "1d");
+        for (const row of observations.filter(row => row.symbol === symbol)) {
+          settlements.set(row.id, learning.settleObservation(row, result.bars, asOf));
+        }
+      } catch (error) { errors.push({symbol, error: error.message}); }
+    });
+    if (settlements.size) observationStore.update(rows => {
+      for (const row of rows) {
+        const updates = settlements.get(row.id);
+        if (!updates) continue;
+        for (const [horizon, outcome] of Object.entries(updates)) if (!row.outcomes[horizon]) row.outcomes[horizon] = outcome;
+      }
+    });
+    return {...learningReport(), errors, evaluatedAt: asOf};
+  })();
+  try { return await evaluationPromise; }
+  finally { evaluationPromise = null; }
+}
+
 async function autoPaperFromSignals({ sector, symbols, scanLimit, maxEntries }) {
   const base =
     sector && ASX_SECTORS[sector]
@@ -1291,7 +1385,7 @@ async function autoPaperFromSignals({ sector, symbols, scanLimit, maxEntries }) 
       : ASX_DISCOVERY_UNIVERSE;
 
   const result = await scanSymbols(base.slice(0, scanLimit || 160), PAPER_RULES.riskDollars);
-  const trades = readTrades();
+  return tradeStore.update(trades => {
   const opened = [];
   const blocked = [];
 
@@ -1343,8 +1437,6 @@ async function autoPaperFromSignals({ sector, symbols, scanLimit, maxEntries }) 
     }
   }
 
-  writeTrades(trades);
-
   return {
     ok: true,
     version: VERSION,
@@ -1362,6 +1454,7 @@ async function autoPaperFromSignals({ sector, symbols, scanLimit, maxEntries }) 
     errors: result.errors,
     updatedAt: new Date().toISOString()
   };
+  });
 }
 
 function equityStats(equityCurve, trades) {
@@ -1398,7 +1491,7 @@ function equityStats(equityCurve, trades) {
     wins: wins.length,
     losses: losses.length,
     winRate: trades.length ? round((wins.length / trades.length) * 100, 2) : 0,
-    profitFactor: grossLoss > 0 ? round(grossWin / grossLoss, 2) : wins.length ? 99 : 0,
+    profitFactor: grossLoss > 0 ? round(grossWin / grossLoss, 2) : null,
     maxDrawdownPct: round(maxDrawdownPct, 2),
     brokerFeePerTrade: PAPER_ACCOUNT.brokerFeePerTrade,
     minTradeValue: PAPER_RULES.minTradeValue,
@@ -1417,20 +1510,31 @@ function equityStats(equityCurve, trades) {
 }
 
 function getBacktestParams(req) {
-  return {
-    accountSize: Math.max(100, Number(req.query.account || PAPER_ACCOUNT.startingBalance || 5000)),
-    riskDollars: Math.max(1, Number(req.query.risk || PAPER_RULES.riskDollars || 50)),
-    maxTradePct: Math.max(1, Math.min(100, Number(req.query.maxTradePct || 25))),
-    maxOpenTrades: Math.max(1, Math.min(20, Number(req.query.maxOpenTrades || PAPER_RULES.maxOpenTrades || 5))),
-    maxEntriesPerDay: Math.max(1, Math.min(20, Number(req.query.maxEntriesPerDay || 3))),
-    minHoldDays: Math.max(1, Number(req.query.minHoldDays || 1)),
-    maxHoldDays: Math.max(2, Number(req.query.maxHoldDays || 12)),
-    years: Math.max(1, Math.min(10, Number(req.query.years || 10))),
-    minTradeValue: Math.max(1, Number(req.query.minTradeValue || PAPER_RULES.minTradeValue || 500)),
-    maxTradeValue: Math.max(1, Number(req.query.maxTradeValue || PAPER_RULES.maxTradeValue || 1000)),
-    entryBrokerFee: Math.max(0, Number(req.query.entryBrokerFee || PAPER_ACCOUNT.brokerFeePerTrade || 9.5)),
-    exitBrokerFee: Math.max(0, Number(req.query.exitBrokerFee || PAPER_ACCOUNT.brokerFeePerTrade || 9.5))
+  const number = (name, fallback, min, max) => {
+    const value = Number(req.query[name] ?? fallback);
+    if (!Number.isFinite(value) || value < min || value > max) throw new Error("Invalid backtest parameter: " + name);
+    return value;
   };
+  const params = {
+    accountSize: number("account", PAPER_ACCOUNT.startingBalance, 100, 100000000),
+    riskDollars: number("risk", PAPER_RULES.riskDollars, 1, 1000000),
+    maxTradePct: number("maxTradePct", 25, 1, 100),
+    maxOpenTrades: number("maxOpenTrades", PAPER_RULES.maxOpenTrades, 1, 20),
+    maxEntriesPerDay: number("maxEntriesPerDay", 3, 1, 20),
+    minHoldDays: number("minHoldDays", 1, 0, 2520),
+    maxHoldDays: number("maxHoldDays", 12, 1, 2520),
+    years: number("years", 10, 1, 10),
+    minTradeValue: number("minTradeValue", PAPER_RULES.minTradeValue, 1, 100000000),
+    maxTradeValue: number("maxTradeValue", PAPER_RULES.maxTradeValue, 1, 100000000),
+    entryBrokerFee: number("entryBrokerFee", PAPER_ACCOUNT.brokerFeePerTrade, 0, 10000),
+    exitBrokerFee: number("exitBrokerFee", PAPER_ACCOUNT.brokerFeePerTrade, 0, 10000),
+    slippageBps: number("slippageBps", 10, 0, 500)
+  };
+  if (params.minHoldDays > params.maxHoldDays || params.minTradeValue > params.maxTradeValue) throw new Error("Backtest minimum exceeds maximum");
+  for (const key of ["maxOpenTrades", "maxEntriesPerDay", "minHoldDays", "maxHoldDays"]) {
+    if (!Number.isInteger(params[key])) throw new Error("Backtest parameter must be an integer: " + key);
+  }
+  return params;
 }
 
 function swingEntryTier(signal) {
@@ -1447,7 +1551,7 @@ function swingEntryTier(signal) {
 }
 
 function calculateBacktestPositionSize({ entry, stop, cash, currentEquity, params }) {
-  const riskPerShare = Number(entry) - Number(stop);
+  const riskPerShare = Number(entry) - Number(stop) * (1 - (params.slippageBps || 0) / 10000);
 
   if (!Number.isFinite(entry) || entry <= 0) return null;
   if (!Number.isFinite(stop) || stop <= 0 || stop >= entry) return null;
@@ -1467,7 +1571,7 @@ function calculateBacktestPositionSize({ entry, stop, cash, currentEquity, param
 
   const minSharesByValue = Math.ceil(minRequiredTradeValue / entry);
   const maxSharesByValue = Math.floor(maxAllowedTradeValue / entry);
-  const maxSharesByRisk = Math.floor(params.riskDollars / riskPerShare);
+  const maxSharesByRisk = Math.floor(Math.max(0, params.riskDollars - params.entryBrokerFee - params.exitBrokerFee) / riskPerShare);
 
   const shares = Math.max(0, Math.min(maxSharesByValue, maxSharesByRisk));
 
@@ -1492,282 +1596,61 @@ function calculateBacktestPositionSize({ entry, stop, cash, currentEquity, param
 
 async function backtestSymbols(symbolList, params) {
   const startedAt = Date.now();
-  const loaded = [];
-  const errors = [];
-  const skipped = [];
-
-  const results = await mapLimit(symbolList, 4, async (symbol) => {
+  const results = await mapLimit(symbolList, 4, async symbol => {
     try {
       const result = await getBars(symbol, "10y", "1d");
-
-      return {
-        ok: true,
-        symbol: normalizeAsxSymbol(symbol),
-        source: result.source,
-        bars: result.bars.slice(-Math.floor(params.years * 252))
-      };
-    } catch (error) {
-      return {
-        ok: false,
-        symbol,
-        error: error.message
-      };
-    }
+      return {symbol: normalizeAsxSymbol(symbol), source: result.source,
+        bars: result.bars.slice(-(Math.floor(params.years * 252) + 230))};
+    } catch (error) { return {symbol, error: error.message}; }
   });
-
-  for (const r of results) {
-    if (r && r.ok) loaded.push(r);
-    else errors.push({ symbol: r && r.symbol, error: r && r.error });
-  }
-
-  let cash = params.accountSize;
-  const open = [];
-  const trades = [];
-  const equityCurve = [];
-
-  const allDates = Array.from(new Set(loaded.flatMap((x) => x.bars.map((b) => b.date)))).sort();
-  const bySymbolDate = new Map();
-
-  for (const item of loaded) {
-    const m = new Map();
-    item.bars.forEach((b, idx) => m.set(b.date, { bar: b, index: idx }));
-    bySymbolDate.set(item.symbol, { item, m });
-  }
-
-  for (const date of allDates) {
-    const entriesToday = [];
-
-    for (let i = open.length - 1; i >= 0; i--) {
-      const pos = open[i];
-      const holder = bySymbolDate.get(pos.symbol);
-      const row = holder && holder.m.get(date);
-      if (!row) continue;
-
-      const bar = row.bar;
-      const holdDays = row.index - pos.entryIndex;
-
-      let exitPrice = null;
-      let exitReason = "";
-
-      if (bar.low <= pos.stop) {
-        exitPrice = pos.stop;
-        exitReason = "Stop hit";
-      } else if (holdDays >= params.minHoldDays && bar.high >= pos.target) {
-        exitPrice = pos.target;
-        exitReason = "Target hit after minimum hold";
-      } else if (holdDays >= params.maxHoldDays) {
-        exitPrice = bar.close;
-        exitReason = "Max hold reached";
-      }
-
-      if (exitPrice !== null) {
-        const grossProceeds = exitPrice * pos.shares;
-        const netProceeds = grossProceeds - pos.exitBrokerFee;
-        const grossPnl = grossProceeds - pos.tradeValue;
-        const totalBrokerFees = pos.entryBrokerFee + pos.exitBrokerFee;
-        const netPnl = grossPnl - totalBrokerFees;
-
-        cash += netProceeds;
-
-        trades.push({
-          symbol: pos.symbol,
-          entryDate: pos.entryDate,
-          exitDate: date,
-          entry: round(pos.entry),
-          exit: round(exitPrice),
-          shares: pos.shares,
-          tradeValue: round(pos.tradeValue),
-          cashCommitted: round(pos.cashCommitted),
-          grossProceeds: round(grossProceeds),
-          netProceeds: round(netProceeds),
-          entryBrokerFee: round(pos.entryBrokerFee),
-          exitBrokerFee: round(pos.exitBrokerFee),
-          totalBrokerFees: round(totalBrokerFees),
-          grossPnl: round(grossPnl),
-          netPnl: round(netPnl),
-          pnl: round(netPnl),
-          pnlPct: pos.tradeValue > 0 ? round((netPnl / pos.tradeValue) * 100, 2) : 0,
-          holdDays,
-          entryScore: pos.entryScore,
-          riskReward: pos.riskReward,
-          exitReason,
-          ruleNotes: "$500 minimum trade value and brokerage included."
-        });
-
-        open.splice(i, 1);
-      }
-    }
-
-    for (const item of loaded) {
-      if (entriesToday.length >= params.maxEntriesPerDay || open.length >= params.maxOpenTrades) break;
-      if (open.some((p) => p.symbol === item.symbol)) continue;
-
-      const row = bySymbolDate.get(item.symbol).m.get(date);
-      if (!row || row.index < 230 || row.index >= item.bars.length - 1) continue;
-
-      const signal = analyzeSymbol(item.symbol, item.bars.slice(0, row.index + 1), { market: "Neutral" }, item.source);
-
-      if (!swingEntryTier(signal) || !signal.paperRules.allowed) continue;
-
-      const nextBar = item.bars[row.index + 1];
-      const entry = Number(nextBar.open);
-      const stop = Number(signal.stopLoss);
-      const target = Number(signal.target1);
-      const rr = calcRiskReward(entry, stop, target);
-
-      if (!Number.isFinite(entry) || !Number.isFinite(stop) || !Number.isFinite(target) || rr < PAPER_RULES.minRiskReward) {
-        skipped.push({
-          date,
-          symbol: item.symbol,
-          reason: "Invalid entry, stop, target or R:R."
-        });
-        continue;
-      }
-
-      const currentEquity =
-        cash +
-        open.reduce((s, p) => {
-          const liveRow = bySymbolDate.get(p.symbol)?.m.get(date);
-          const mark = liveRow ? liveRow.bar.close : p.lastPrice;
-          return s + p.shares * mark;
-        }, 0);
-
-      const size = calculateBacktestPositionSize({
-        entry,
-        stop,
-        cash,
-        currentEquity,
-        params
-      });
-
-      if (!size) {
-        skipped.push({
-          date,
-          symbol: item.symbol,
-          reason: "Skipped by $500 minimum trade value, risk, brokerage or cash rule."
-        });
-        continue;
-      }
-
-      cash -= size.cashCommitted;
-
-      open.push({
-        symbol: item.symbol,
-        entryDate: nextBar.date,
-        entryIndex: row.index + 1,
-        entry,
-        shares: size.shares,
-        tradeValue: size.tradeValue,
-        cashCommitted: size.cashCommitted,
-        entryBrokerFee: size.entryBrokerFee,
-        exitBrokerFee: size.estimatedExitBrokerFee,
-        grossRisk: size.grossRisk,
-        riskAfterFees: size.riskAfterFees,
-        stop,
-        target,
-        lastPrice: entry,
-        entryScore: signal.score,
-        riskReward: round(rr, 2)
-      });
-
-      entriesToday.push(item.symbol);
-    }
-
-    let value = cash;
-
-    for (const pos of open) {
-      const row = bySymbolDate.get(pos.symbol)?.m.get(date);
-      const last = row ? row.bar.close : pos.lastPrice;
-      pos.lastPrice = last;
-      value += pos.shares * last;
-    }
-
-    equityCurve.push({
-      date,
-      equity: round(value)
-    });
-  }
-
-  const lastDate = allDates[allDates.length - 1];
-
-  for (let i = open.length - 1; i >= 0; i--) {
-    const pos = open[i];
-    const row = bySymbolDate.get(pos.symbol)?.m.get(lastDate);
-    const price = row ? row.bar.close : pos.lastPrice;
-
-    const grossProceeds = price * pos.shares;
-    const netProceeds = grossProceeds - pos.exitBrokerFee;
-    const grossPnl = grossProceeds - pos.tradeValue;
-    const totalBrokerFees = pos.entryBrokerFee + pos.exitBrokerFee;
-    const netPnl = grossPnl - totalBrokerFees;
-
-    cash += netProceeds;
-
-    trades.push({
-      symbol: pos.symbol,
-      entryDate: pos.entryDate,
-      exitDate: lastDate,
-      entry: round(pos.entry),
-      exit: round(price),
-      shares: pos.shares,
-      tradeValue: round(pos.tradeValue),
-      cashCommitted: round(pos.cashCommitted),
-      grossProceeds: round(grossProceeds),
-      netProceeds: round(netProceeds),
-      entryBrokerFee: round(pos.entryBrokerFee),
-      exitBrokerFee: round(pos.exitBrokerFee),
-      totalBrokerFees: round(totalBrokerFees),
-      grossPnl: round(grossPnl),
-      netPnl: round(netPnl),
-      pnl: round(netPnl),
-      pnlPct: pos.tradeValue > 0 ? round((netPnl / pos.tradeValue) * 100, 2) : 0,
-      holdDays: row ? row.index - pos.entryIndex : 0,
-      entryScore: pos.entryScore,
-      riskReward: pos.riskReward,
-      exitReason: "Closed at end of backtest",
-      ruleNotes: "$500 minimum trade value and brokerage included."
-    });
-  }
-
-  if (equityCurve.length) {
-    equityCurve[equityCurve.length - 1].equity = round(cash);
-  }
-
+  const loaded = results.filter(item => !item.error);
+  const errors = results.filter(item => item.error);
+  const simulation = require("./lib/backtest.cjs").simulatePortfolio(loaded, params, {
+    analyze: analyzeSymbol, qualifies: swingEntryTier,
+    sizePosition: calculateBacktestPositionSize, minRiskReward: PAPER_RULES.minRiskReward
+  });
   return {
-    ok: true,
-    version: VERSION,
-    market: "ASX",
+    ok: loaded.length > 0, version: VERSION, market: "ASX",
     mode: "asx-share-backtest-with-brokerage-and-minimum-trade-value",
-    params,
-    requested: symbolList.length,
-    loaded: loaded.length,
-    errors,
-    skippedCount: skipped.length,
-    skipped: skipped.slice(-80),
-    stats: equityStats(equityCurve, trades),
-    trades: trades.slice(-250).reverse(),
-    equityCurve,
-    updatedAt: new Date().toISOString(),
-    elapsedMs: Date.now() - startedAt,
+    params, requested: symbolList.length, loaded: loaded.length, errors,
+    skippedCount: simulation.skipped.length, skipped: simulation.skipped.slice(-80),
+    stats: equityStats(simulation.equityCurve, simulation.trades),
+    trades: simulation.trades.slice(-250).reverse(), equityCurve: simulation.equityCurve,
+    updatedAt: new Date().toISOString(), elapsedMs: Date.now() - startedAt,
     notes: [
-      "Uses public Yahoo Finance ASX chart data only.",
-      "No fake quotes, no fake options, no fake official live data.",
-      "Backtest now follows the paper-trading rules.",
-      "$500 minimum trade value is enforced.",
-      "Entry and exit brokerage are deducted.",
-      "P/L is net after broker fees.",
-      "Entries are simulated on the next daily open after a qualifying signal.",
-      "Backtesting is historical simulation, not proof of future performance."
+      "Historical ASX public-data simulation. Not a forecast or verified trading edge.",
+      "Next-session open entries; stops gap at the open; same-day ambiguous paths assume stop first.",
+      "Brokerage and adverse slippage are included; the risk budget includes both fees.",
+      "Warm-up bars precede entries. Failed symbols are reported; delisted shares and corporate actions are not fully controlled.",
+      "A neutral market regime is assumed. Live market context and fills can differ.",
+      "Minimum target holding period: " + params.minHoldDays + " trading sessions. Stops remain active on entry day."
     ]
   };
 }
 
-app.get("/api/health", (req, res) =>
+function storageStatus() {
+  const status = {
+    configuredDirectory: !!process.env.STOCK_DATA_DIR,
+    persistenceVerified: false,
+    message: process.env.STOCK_DATA_DIR ?
+      "Storage directory configured. Confirm with your host that it is a persistent disk and keep an external backup." :
+      "Local storage only. Hosting restarts or deployments may erase history unless STOCK_DATA_DIR points to a persistent disk. Export a backup."
+  };
+  try {
+    readTrades(); observationStore.read();
+    if (fs.existsSync(tradesPath + ".lock") || fs.existsSync(observationStore.filename + ".lock")) throw new Error("History writer lock is present; review storage before writing");
+    status.readable = true;
+  } catch (error) { status.readable = false; status.error = error.message; }
+  return status;
+}
+
+app.get(["/api/health", "/health"], (req, res) =>
   res.json({
     ok: true,
     version: VERSION,
     service: "TradingMint ASX Real",
     status: "online",
+    storage: storageStatus(),
     config: ASX_CONFIG,
     paperAccount: PAPER_ACCOUNT,
     paperRules: PAPER_RULES,
@@ -1777,6 +1660,9 @@ app.get("/api/health", (req, res) =>
       "/api/day-scan",
       "/api/bars",
       "/api/backtest",
+      "/api/learning",
+      "/api/learning/evaluate",
+      "/api/backup",
       "/api/options",
       "/api/paper/open",
       "/api/paper/close",
@@ -1793,6 +1679,24 @@ app.get("/api/health", (req, res) =>
     time: new Date().toISOString()
   })
 );
+
+app.get("/api/learning", (req, res) => {
+  try { res.json({ok: true, ...learningReport()}); }
+  catch (error) { res.status(503).json({ok: false, error: error.message}); }
+});
+
+app.post("/api/learning/evaluate", async (req, res) => {
+  try { res.json({ok: true, ...await evaluateObservations()}); }
+  catch (error) { res.status(503).json({ok: false, error: error.message}); }
+});
+
+app.get("/api/backup", (req, res) => {
+  try {
+    res.set("Content-Disposition", 'attachment; filename="stock-learner-backup.json"');
+    res.json({schemaVersion: 1, exportedAt: new Date().toISOString(), strategyVersion: VERSION,
+      trades: readTrades(), observations: observationStore.read(), paperRules: PAPER_RULES, paperAccount: PAPER_ACCOUNT});
+  } catch (error) { res.status(503).json({ok: false, error: error.message}); }
+});
 
 app.get("/api/bars", async (req, res) => {
   try {
@@ -1950,6 +1854,10 @@ app.post("/api/paper/open", async (req, res) => {
     if (!Number.isFinite(shares) || shares < 1) throw new Error("shares must be at least 1");
     if (!Number.isFinite(stop) || stop <= 0) throw new Error("valid stop is required");
     if (!Number.isFinite(target) || target <= 0) throw new Error("valid target is required");
+    if (stop >= entry || target <= entry) throw new Error("stop must be below entry and target above entry");
+    if ((entry - stop) * shares + expectedEntryFee() + expectedExitFee() > PAPER_RULES.riskDollars) {
+      throw new Error("risk including entry and exit fees exceeds the paper risk budget");
+    }
 
     const validation = validatePaperTradeRequest(req.body);
 
@@ -1967,7 +1875,7 @@ app.post("/api/paper/open", async (req, res) => {
     const tradeValue = entry * shares;
     validateTradeValueOrThrow(tradeValue);
 
-    const trades = readTrades();
+    const result = tradeStore.update(trades => {
 
     if (openTradeCount(trades) >= PAPER_RULES.maxOpenTrades) {
       throw new Error("maximum open paper trades reached");
@@ -1978,7 +1886,7 @@ app.post("/api/paper/open", async (req, res) => {
     }
 
     const trade = enrichTradeFinancials({
-      id: "ASX-" + Date.now(),
+      id: "ASX-" + require("node:crypto").randomUUID(),
       status: "open",
       market: "ASX",
       symbol,
@@ -2005,14 +1913,14 @@ app.post("/api/paper/open", async (req, res) => {
     }
 
     trades.push(trade);
-    writeTrades(trades);
-
-    res.json({
+    return {
       ok: true,
       version: VERSION,
       trade,
       account: paperAccountStats(trades)
+    };
     });
+    res.json(result);
   } catch (error) {
     res.status(400).json({
       ok: false,
@@ -2054,7 +1962,7 @@ app.post("/api/paper/close", (req, res) => {
     if (!id) throw new Error("id is required");
     if (!Number.isFinite(exit) || exit <= 0) throw new Error("valid exit price is required");
 
-    const trades = readTrades();
+    const result = tradeStore.update(trades => {
     const trade = trades.find((t) => t.id === id);
 
     if (!trade) throw new Error("trade not found");
@@ -2067,14 +1975,14 @@ app.post("/api/paper/close", (req, res) => {
     trade.exitReason = String(req.body.exitReason || "manual close");
 
     enrichTradeFinancials(trade);
-    writeTrades(trades);
-
-    res.json({
+    return {
       ok: true,
       version: VERSION,
       trade,
       account: paperAccountStats(trades)
+    };
     });
+    res.json(result);
   } catch (error) {
     res.status(400).json({
       ok: false,
@@ -2084,26 +1992,30 @@ app.post("/api/paper/close", (req, res) => {
   }
 });
 
-app.get("/api/paper/trades", (req, res) => {
-  const trades = readTrades().map((t) => enrichTradeFinancials({ ...t }));
-
+app.get("/api/paper/trades", async (req, res) => {
+  try {
+  const snapshot = await paperSnapshot();
   res.json({
     ok: true,
     version: VERSION,
-    account: paperAccountStats(trades),
-    trades: trades.slice().reverse()
+    account: snapshot.account,
+    trades: snapshot.trades.slice().reverse(),
+    valuationWarnings: snapshot.warnings
   });
+  } catch (error) { res.status(503).json({ ok: false, error: error.message }); }
 });
 
-app.get("/api/paper/stats", (req, res) => {
-  const trades = readTrades().map((t) => enrichTradeFinancials({ ...t }));
-
+app.get("/api/paper/stats", async (req, res) => {
+  try {
+  const snapshot = await paperSnapshot();
   res.json({
     ok: true,
     version: VERSION,
     paperAccount: PAPER_ACCOUNT,
-    stats: paperAccountStats(trades)
+    stats: snapshot.account,
+    valuationWarnings: snapshot.warnings
   });
+  } catch (error) { res.status(503).json({ ok: false, error: error.message }); }
 });
 
 app.get("/api/sectors", (req, res) =>
@@ -2159,7 +2071,7 @@ app.use((req, res) => {
   res.sendFile(path.join(publicPath, "index.html"));
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, process.env.STOCK_BIND_HOST || "0.0.0.0", () => {
   console.log("TradingMint ASX Real running on port " + PORT);
   console.log("Version: " + VERSION);
 });
